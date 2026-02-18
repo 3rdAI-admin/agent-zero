@@ -27,10 +27,16 @@ def ensure_playwright_binary():
     bin = get_playwright_binary()
     if not bin:
         cache = get_playwright_cache_dir()
+        # Ensure cache directory exists
+        os.makedirs(cache, exist_ok=True)
         env = os.environ.copy()
         env["PLAYWRIGHT_BROWSERS_PATH"] = cache
+        # Use python -m playwright instead of just 'playwright' command
+        # This works regardless of PATH configuration
+        python_exec = sys.executable
+        # Install chromium (--only-shell flag was removed in newer versions)
         subprocess.check_call(
-            ["playwright", "install", "chromium", "--only-shell"],
+            [python_exec, "-m", "playwright", "install", "chromium"],
             env=env
         )
     bin = get_playwright_binary()

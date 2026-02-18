@@ -3,6 +3,7 @@ from datetime import timedelta
 import os
 import secrets
 import hashlib
+import ssl
 import time
 import socket
 import struct
@@ -245,7 +246,16 @@ def run():
 
     app = DispatcherMiddleware(webapp, middleware_routes)  # type: ignore
 
-    PrintStyle().debug(f"Starting server at http://{host}:{port} ...")
+    # Enable HTTPS with self-signed cert if available (allows browser microphone access)
+    ssl_ctx = None
+    cert_file = "/etc/ssl/agent-zero/server.crt"
+    key_file = "/etc/ssl/agent-zero/server.key"
+    if os.path.isfile(cert_file) and os.path.isfile(key_file):
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.load_cert_chain(cert_file, key_file)
+        PrintStyle().debug(f"Starting server at https://{host}:{port} ...")
+    else:
+        PrintStyle().debug(f"Starting server at http://{host}:{port} ...")
 
     server = make_server(
         host=host,
@@ -253,6 +263,7 @@ def run():
         app=app,
         request_handler=NoRequestLoggingWSGIRequestHandler,
         threaded=True,
+        ssl_context=ssl_ctx,
     )
     process.set_server(server)
     server.log_startup()

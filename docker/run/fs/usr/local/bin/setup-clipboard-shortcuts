@@ -1,0 +1,50 @@
+#!/bin/bash
+# Setup clipboard shortcuts and right-click support
+export DISPLAY=:99
+
+# Ensure clipboard tools are installed
+apt-get install -y xdotool xclip xsel > /dev/null 2>&1
+
+# Create Fluxbox config directory
+mkdir -p /root/.fluxbox
+
+# Configure keyboard shortcuts for copy/paste
+cat > /root/.fluxbox/keys << 'KEYS'
+# Copy: Shift+Control+C
+Control Shift c :ExecCommand sh -c "xclip -selection primary -o 2>/dev/null | xclip -selection clipboard -i 2>/dev/null || xsel --primary 2>/dev/null | xsel --clipboard -i 2>/dev/null"
+
+# Paste: Shift+Control+V  
+Control Shift v :ExecCommand sh -c "xclip -selection clipboard -o 2>/dev/null | xdotool type --clearmodifiers --file - 2>/dev/null || xsel --clipboard -o 2>/dev/null | xdotool type --clearmodifiers --file - 2>/dev/null"
+
+# Right-click menu (mouse button 3)
+mouse3 :RootMenu
+Mod1 mouse1 :RootMenu
+KEYS
+
+# Create basic menu for right-click
+cat > /root/.fluxbox/menu << 'MENU'
+[begin] (Fluxbox)
+  [exec] (Terminal) {lxterminal}
+  [exec] (Bash) {xterm -e bash}
+  [exec] (Browser) {chromium --no-sandbox}
+  [submenu] (Applications)
+    [submenu] (Shells)
+      [exec] (Bash) {xterm -e bash}
+      [exec] (LXTerminal) {lxterminal}
+    [end]
+  [end]
+  [submenu] (System)
+    [exec] (Reconfigure) {fluxbox -reconfigure}
+    [exec] (Restart) {fluxbox -restart}
+  [end]
+  [separator]
+  [exit] (Exit)
+[end]
+MENU
+
+# Reconfigure Fluxbox if it's running
+if pgrep -x fluxbox > /dev/null; then
+    fluxbox -reconfigure 2>/dev/null || true
+fi
+
+echo "✅ Clipboard shortcuts and right-click configured"

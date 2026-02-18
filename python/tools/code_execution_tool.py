@@ -159,6 +159,33 @@ class CodeExecution(Tool):
         return self.state
 
     async def execute_python_code(self, session: int, code: str, reset: bool = False):
+        # Fix literal escape sequences that appear in code strings
+        # This handles cases where code contains literal \n, \t, \r as characters
+        # The issue: when code comes from JSON or string representations, \n might be literal
+        # Python interprets \ as line continuation, but \n causes SyntaxError
+        
+        # More aggressive fix: replace literal escape sequences even if actual newlines exist
+        # This handles mixed cases where code has both literal \n and actual newlines
+        import re
+        
+        # Count occurrences to determine if we should convert
+        literal_newlines = code.count('\\n')
+        actual_newlines = code.count('\n')
+        
+        # If we have literal \n sequences, convert them (even if actual newlines exist)
+        # This handles cases like: "code\\nmore code\n" -> "code\nmore code\n"
+        if literal_newlines > 0:
+            # Replace literal \n with actual newlines
+            # Use regex to avoid replacing \\n (double-escaped) incorrectly
+            # Pattern: \n that's not preceded by another backslash
+            code = re.sub(r'(?<!\\)\\n', '\n', code)
+        
+        # Same for tabs and carriage returns
+        if '\\t' in code:
+            code = re.sub(r'(?<!\\)\\t', '\t', code)
+        if '\\r' in code:
+            code = re.sub(r'(?<!\\)\\r', '\r', code)
+        
         escaped_code = shlex.quote(code)
         command = f"ipython -c {escaped_code}"
         prefix = "python> " + self.format_command_for_output(code) + "\n\n"
@@ -476,8 +503,13 @@ class CodeExecution(Tool):
         if not project_name:
             return None
         project_path = projects.get_project_folder(project_name)
-        normalized = files.normalize_a0_path(project_path)
-        return normalized
+        # For native installs, return the actual path instead of Docker-normalized path
+        if runtime.is_dockerized():
+            normalized = files.normalize_a0_path(project_path)
+            return normalized
+        else:
+            # For native installs, return the actual absolute path
+            return project_path
         
 
         

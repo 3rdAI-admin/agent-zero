@@ -14,7 +14,14 @@ class LocalInteractiveSession:
         self.cwd = cwd
 
     async def connect(self):
-        self.session = tty_session.TTYSession(runtime.get_terminal_executable(), cwd=self.cwd)
+        # Ensure PATH includes ~/.local/bin for Claude Code and other user tools
+        import os
+        env = os.environ.copy()
+        local_bin = os.path.expanduser("~/.local/bin")
+        if local_bin not in env.get("PATH", ""):
+            env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
+        
+        self.session = tty_session.TTYSession(runtime.get_terminal_executable(), cwd=self.cwd, env=env)
         await self.session.start()
         await self.session.read_full_until_idle(idle_timeout=1, total_timeout=1)
 

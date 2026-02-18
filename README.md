@@ -6,13 +6,18 @@
     <a href="https://trendshift.io/repositories/11745" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11745" alt="frdel%2Fagent-zero | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
-[![Agent Zero Website](https://img.shields.io/badge/Website-agent--zero.ai-0A192F?style=for-the-badge&logo=vercel&logoColor=white)](https://agent-zero.ai) [![Thanks to Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-Thanks%20to%20Sponsors-FF69B4?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/agent0ai) [![Follow on X](https://img.shields.io/badge/X-Follow-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/Agent0ai) [![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/B8KZKNsPpj) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@AgentZeroFW) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/jan-tomasek/) [![Follow on Warpcast](https://img.shields.io/badge/Warpcast-Follow-5A32F3?style=for-the-badge)](https://warpcast.com/agent-zero) 
+[![Agent Zero Website](https://img.shields.io/badge/Website-agent--zero.ai-0A192F?style=for-the-badge&logo=vercel&logoColor=white)](https://agent-zero.ai) [![Thanks to Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-Thanks%20to%20Sponsors-FF69B4?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/agent0ai) [![Follow on X](https://img.shields.io/badge/X-Follow-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/Agent0ai) [![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/B8KZKNsPpj) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@AgentZeroFW) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/jan-tomasek/) [![Follow on Warpcast](https://img.shields.io/badge/Warpcast-Follow-5A32F3?style=for-the-bad-ge)](https://warpcast.com/agent-zero) 
 
 
 ## Documentation:
 
 [Introduction](#a-personal-organic-agentic-framework-that-grows-and-learns-with-you) •
+[Quick Reference](./docs/QUICK_REFERENCE.md) •
+[Complete Setup](./docs/COMPLETE_SETUP_GUIDE.md) •
 [Installation](./docs/installation.md) •
+[VNC Desktop Access](./docs/VNC_ACCESS.md) •
+[Claude Code Integration](./docs/CLAUDE_CODE_INTEGRATION.md) •
+[Native Installation (No Docker)](./docs/NATIVE_INSTALLATION.md) •
 [Development](./docs/development.md) •
 [Extensibility](./docs/extensibility.md) •
 [Connectivity](./docs/connectivity.md) •
@@ -127,6 +132,29 @@ docker run -p 50001:80 agent0ai/agent-zero
 ## 🐳 Fully Dockerized, with Speech-to-Text and TTS
 
 ![Settings](docs/res/settings-page-ui.png)
+
+- Build & run from source (uses the new Dockerfile + docker-compose):
+  ```bash
+  # Build the image from the repository checkout
+  docker compose build
+
+  # Start the stack (Agent Zero listens on http://localhost:8888 by default)
+  docker compose up -d
+
+  # Tear everything down
+  docker compose down
+  ```
+
+- Environment:
+  - Copy `.env.example` to `.env` (or edit `.env`) before running so Agent Zero has model/provider credentials.
+  - Adjust exposed port via `HOST_PORT=8888` (passed through docker-compose).
+  - Override the git branch used inside the image with `BRANCH=my-feature`.
+- Remote access:
+  - From any device on the same LAN, open `http://<your-host-LAN-IP>:8888` (for example, `http://192.168.1.50:8888`).
+  - Ensure the host firewall allows inbound TCP traffic on the chosen port (8888 by default).
+  - For WAN access, tunnel/forward the same port through your router or use the built-in tunnel service.
+- Volumes:
+  - `./memory`, `./knowledge`, `./logs`, and `./tmp` are mounted into the container to persist runtime data between restarts. Feel free to customize or remove individual mounts if you want a stateless container.
 
 - Customizable settings allow users to tailor the agent's behavior and responses to their needs.
 - The Web UI output is very clean, fluid, colorful, readable, and interactive; nothing is hidden.

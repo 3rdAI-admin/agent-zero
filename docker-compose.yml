@@ -1,0 +1,67 @@
+services:
+  agent-zero:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BRANCH: "${BRANCH:-local}"
+    image: agent-zero:local
+    container_name: agent-zero
+    env_file:
+      - .env
+    environment:
+      # Claude Code config directory - persists OAuth credentials
+      - CLAUDE_CONFIG_DIR=/home/claude/.claude
+    ports:
+      - "${HOST_PORT:-8888}:80"  # Web UI accessible on port 8888
+      - "5901:5900"  # VNC server for browser access (CAPTCHA completion) - use 5901 to avoid conflicts
+    volumes:
+      # Persist .env so auth and API keys survive container recreation
+      - ./.env:/a0/.env
+      # Persist data directories that change at runtime
+      - ./memory:/a0/memory
+      - ./knowledge:/a0/knowledge
+      - ./logs:/a0/logs
+      - ./tmp:/a0/tmp
+      # Persist Claude Code OAuth authentication
+      - ./claude-config:/root/.config/claude-code
+      # Also mount for claude user (for YOLO mode)
+      - ./claude-config:/home/claude/.config/claude-code
+      # Persist Claude Code credentials (where tokens are actually stored)
+      - ./claude-credentials:/home/claude/.claude
+      # Persist keyring data for Claude Code OAuth tokens
+      - ./claude-keyring:/home/claude/.local/share/python_keyring
+      # Persist gnome-keyring data
+      - ./claude-gnome-keyring:/home/claude/.local/share/keyrings
+    # Network configuration for LAN access and security scanning
+    # CURRENT: Bridge mode with capabilities - Port 8888 maintained, allows network scanning
+    # Option 1: Use host network mode (full access to host network)
+    # NOTE: If you enable host network mode, you must remove the ports section
+    # and the Web UI will be on port 80 (not 8888)
+    # Uncomment the line below ONLY if you need maximum network access:
+    # network_mode: host
+    # Option 2: Bridge mode with capabilities (CURRENT - keeps port 8888, allows scanning)
+    # Keep network_mode commented and use cap_add below
+    cap_add:
+      - NET_RAW      # Required for nmap and other raw socket tools
+      - NET_ADMIN    # Required for advanced network operations
+      - SYS_ADMIN    # May be needed for some security tools
+    # Allow access to host network services
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    # Resource limits - set to 16GB for better responsiveness; Docker Desktop must allow at least this much
+    deploy:
+      resources:
+        limits:
+          memory: 16G     # Max memory (increase if host has more and agent is still slow)
+          cpus: '4.0'     # Max CPU cores
+        reservations:
+          memory: 8G      # Guaranteed RAM (reduces swapping; increase if agent is slow)
+          cpus: '2.0'     # Guaranteed CPU
+    healthcheck:
+      test: ["CMD", "curl", "-fk", "https://localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

@@ -12,6 +12,8 @@ PROJECTS_PARENT_DIR = "usr/projects"
 PROJECT_META_DIR = ".a0proj"
 PROJECT_INSTRUCTIONS_DIR = "instructions"
 PROJECT_KNOWLEDGE_DIR = "knowledge"
+PROJECT_ASSESSMENT_DIR = "assessment"
+PROJECT_EVIDENCE_DIR = "evidence"
 PROJECT_HEADER_FILE = "project.json"
 
 CONTEXT_DATA_KEY_PROJECT = "project"
@@ -282,11 +284,19 @@ def build_system_prompt_vars(name: str):
             additional_instructions[k] for k in sorted(additional_instructions)
         )
     ).strip()
+    project_path = get_project_folder(name)
+    # For native installs, return actual path; for Docker, normalize to /a0/
+    from python.helpers.runtime import is_dockerized
+    if is_dockerized():
+        normalized_path = files.normalize_a0_path(project_path)
+    else:
+        normalized_path = project_path
+    
     return {
         "project_name": project_data.get("title", ""),
         "project_description": project_data.get("description", ""),
         "project_instructions": complete_instructions or "",
-        "project_path": files.normalize_a0_path(get_project_folder(name)),
+        "project_path": normalized_path,
     }
 
 
@@ -350,6 +360,10 @@ def create_project_meta_folders(name: str):
         files.create_dir(
             get_project_meta_folder(name, PROJECT_KNOWLEDGE_DIR, memory_type.value)
         )
+
+    # create assessment folders for security assessments
+    files.create_dir(get_project_meta_folder(name, PROJECT_ASSESSMENT_DIR))
+    files.create_dir(get_project_meta_folder(name, PROJECT_ASSESSMENT_DIR, PROJECT_EVIDENCE_DIR))
 
 
 def get_knowledge_files_count(name: str):

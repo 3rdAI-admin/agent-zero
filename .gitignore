@@ -43,6 +43,13 @@ instruments/**
 # Global rule to include .gitkeep files anywhere
 !**/.gitkeep
 
+# Sensitive credentials and runtime data
+claude-credentials/
+claude-config/
+claude-keyring/
+claude-gnome-keyring/
+venv/
+
 # for browser-use
 agent_history.gif
 

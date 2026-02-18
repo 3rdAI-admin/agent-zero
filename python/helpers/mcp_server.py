@@ -218,6 +218,317 @@ async def finish_chat(
         return ToolResponse(response="Chat finished", chat_id=chat_id)
 
 
+# =============================================================================
+# SECURITY ASSESSMENT TOOLS - For Claude Code integration
+# =============================================================================
+
+NETWORK_SCAN_DESCRIPTION = """
+Run a network scan using nmap against a target host or network.
+Use for port discovery, service detection, and OS fingerprinting.
+Target must be in-scope for the active assessment.
+"""
+
+
+@mcp_server.tool(
+    name="network_scan",
+    description=NETWORK_SCAN_DESCRIPTION,
+    tags={"security", "network", "scan", "nmap", "ports", "recon"},
+)
+async def network_scan(
+    target: Annotated[str, Field(description="Target IP, hostname, or CIDR range")],
+    ports: Annotated[str, Field(description="Port specification (e.g., '22,80,443' or '1-1000')")] = "1-1000",
+    scan_type: Annotated[str, Field(description="Scan type: tcp, syn, udp")] = "tcp",
+    service_detection: Annotated[bool, Field(description="Enable service version detection")] = True,
+    project_name: Annotated[str | None, Field(description="Project name for scope validation")] = None,
+) -> dict:
+    """Run network scan with scope validation."""
+    from python.tools.security.network_scanner import NetworkScanner
+    from python.helpers.assessment_state import get_assessment_state
+
+    # Scope validation if project specified
+    if project_name:
+        state = get_assessment_state(project_name)
+        if not state.is_in_scope(target):
+            return {"status": "error", "error": f"Target {target} is not in scope"}
+
+    _PRINTER.print(f"[MCP Security] Network scan requested: {target}")
+
+    success, results, raw = NetworkScanner.nmap_scan(
+        target=target,
+        ports=ports,
+        scan_type=scan_type,
+        service_detection=service_detection
+    )
+
+    if not success:
+        return {"status": "error", "error": raw}
+
+    # Convert results to dict
+    hosts = []
+    for host in results:
+        ports_data = [
+            {
+                "port": p.port,
+                "protocol": p.protocol,
+                "state": p.state,
+                "service": p.service,
+                "version": p.version
+            }
+            for p in host.ports
+        ]
+        hosts.append({
+            "address": host.address,
+            "hostname": host.hostname,
+            "state": host.state,
+            "ports": ports_data,
+            "os_matches": host.os_matches
+        })
+
+    return {"status": "success", "hosts": hosts, "host_count": len(hosts)}
+
+
+WEB_SCAN_DESCRIPTION = """
+Run a web vulnerability scan using nikto or nuclei.
+Use for web server scanning, vulnerability detection, and technology fingerprinting.
+"""
+
+
+@mcp_server.tool(
+    name="web_scan",
+    description=WEB_SCAN_DESCRIPTION,
+    tags={"security", "web", "scan", "vulnerability", "nikto", "nuclei"},
+)
+async def web_scan(
+    target: Annotated[str, Field(description="Target URL (e.g., https://example.com)")],
+    scan_type: Annotated[str, Field(description="Scan type: nikto, nuclei, quick")] = "quick",
+    severity_filter: Annotated[str | None, Field(description="Filter by severity: critical,high,medium,low")] = None,
+    project_name: Annotated[str | None, Field(description="Project name for scope validation")] = None,
+) -> dict:
+    """Run web vulnerability scan."""
+    from python.tools.security.web_scanner import WebScanner
+    from python.helpers.assessment_state import get_assessment_state
+
+    # Scope validation
+    if project_name:
+        state = get_assessment_state(project_name)
+        if not state.is_in_scope(target):
+            return {"status": "error", "error": f"Target {target} is not in scope"}
+
+    _PRINTER.print(f"[MCP Security] Web scan requested: {target} ({scan_type})")
+
+    if scan_type == "nikto":
+        success, findings, raw = WebScanner.nikto_scan(target)
+    elif scan_type == "nuclei":
+        severity = severity_filter.split(",") if severity_filter else None
+        success, findings, raw = WebScanner.nuclei_scan(target, severity=severity)
+    else:  # quick
+        success, results, summary = WebScanner.quick_web_scan(target)
+        return {"status": "success" if success else "error", "results": results, "summary": summary}
+
+    if not success:
+        return {"status": "error", "error": raw}
+
+    findings_data = [
+        {
+            "severity": f.severity,
+            "title": f.title,
+            "description": f.description,
+            "target": f.target,
+            "evidence": f.evidence
+        }
+        for f in findings
+    ]
+
+    return {"status": "success", "findings": findings_data, "finding_count": len(findings)}
+
+
+CODE_REVIEW_DESCRIPTION = """
+Run static code analysis (SAST) using semgrep and bandit.
+Analyzes code for security vulnerabilities, insecure patterns, and best practices.
+"""
+
+
+@mcp_server.tool(
+    name="code_review",
+    description=CODE_REVIEW_DESCRIPTION,
+    tags={"security", "code", "sast", "review", "semgrep", "bandit"},
+)
+async def code_review(
+    path: Annotated[str, Field(description="Path to file or directory to scan")],
+    language: Annotated[str | None, Field(description="Language hint: python, javascript, auto")] = "auto",
+    severity_filter: Annotated[str | None, Field(description="Minimum severity: low, medium, high")] = None,
+) -> dict:
+    """Run static code analysis."""
+    from python.tools.security.code_scanner import CodeScanner
+    import os
+
+    if not os.path.exists(path):
+        return {"status": "error", "error": f"Path not found: {path}"}
+
+    _PRINTER.print(f"[MCP Security] Code review requested: {path}")
+
+    if language == "auto":
+        success, results, summary = CodeScanner.auto_scan(path)
+        # Flatten results
+        all_findings = []
+        for scanner, findings in results.items():
+            for f in findings:
+                all_findings.append({
+                    "scanner": scanner,
+                    "file": f.file,
+                    "line": f.line,
+                    "severity": f.severity,
+                    "rule_id": f.rule_id,
+                    "message": f.message,
+                    "cwe": f.cwe
+                })
+        return {"status": "success" if success else "error", "findings": all_findings, "summary": summary}
+    elif language == "python":
+        success, findings, raw = CodeScanner.bandit_scan(path, severity=severity_filter or "low")
+    else:
+        success, findings, raw = CodeScanner.semgrep_scan(path)
+
+    if not success:
+        return {"status": "error", "error": raw}
+
+    findings_data = [
+        {
+            "file": f.file,
+            "line": f.line,
+            "severity": f.severity,
+            "rule_id": f.rule_id,
+            "message": f.message,
+            "cwe": f.cwe
+        }
+        for f in findings
+    ]
+
+    return {"status": "success", "findings": findings_data, "finding_count": len(findings)}
+
+
+GET_ASSESSMENT_STATE_DESCRIPTION = """
+Get the current security assessment state for a project.
+Returns targets, findings, progress, and context information.
+"""
+
+
+@mcp_server.tool(
+    name="get_assessment_state",
+    description=GET_ASSESSMENT_STATE_DESCRIPTION,
+    tags={"security", "assessment", "state", "findings"},
+)
+async def get_assessment_state_tool(
+    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
+) -> dict:
+    """Get assessment state for a project."""
+    from python.helpers.assessment_state import get_assessment_state
+
+    try:
+        state = get_assessment_state(project_name)
+        data = state.load()
+        summary = state.get_summary()
+        return {"status": "success", "state": data, "summary": summary}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+UPDATE_FINDING_DESCRIPTION = """
+Add or update a security finding in the assessment state.
+Use to record vulnerabilities discovered during testing.
+"""
+
+
+@mcp_server.tool(
+    name="update_finding",
+    description=UPDATE_FINDING_DESCRIPTION,
+    tags={"security", "assessment", "finding", "vulnerability"},
+)
+async def update_finding_tool(
+    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
+    title: Annotated[str, Field(description="Finding title")],
+    severity: Annotated[str, Field(description="Severity: critical, high, medium, low, info")],
+    description: Annotated[str, Field(description="Detailed description of the finding")],
+    affected: Annotated[list[str] | None, Field(description="List of affected targets/URLs")] = None,
+    cwe: Annotated[str | None, Field(description="CWE identifier (e.g., CWE-89)")] = None,
+    evidence: Annotated[str | None, Field(description="Evidence or proof-of-concept")] = None,
+    remediation: Annotated[str | None, Field(description="Recommended fix")] = None,
+) -> dict:
+    """Add or update a finding."""
+    from python.helpers.assessment_state import get_assessment_state, FindingData
+
+    try:
+        state = get_assessment_state(project_name)
+
+        finding = FindingData(
+            severity=severity,
+            title=title,
+            description=description,
+            affected=affected or [],
+            cwe=cwe or "",
+            remediation=remediation or "",
+            found_by="claude_code",
+            status="potential"
+        )
+
+        # Save evidence if provided
+        if evidence:
+            evidence_path = state.save_evidence(f"{title.replace(' ', '_')}.txt", evidence)
+            if evidence_path:
+                finding["evidence"] = [evidence_path]
+
+        finding_id = state.add_finding(finding)
+
+        return {"status": "success", "finding_id": finding_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+ADD_TARGET_DESCRIPTION = """
+Add a target to the security assessment.
+Use to track discovered hosts, services, or web applications.
+"""
+
+
+@mcp_server.tool(
+    name="add_target",
+    description=ADD_TARGET_DESCRIPTION,
+    tags={"security", "assessment", "target", "recon"},
+)
+async def add_target_tool(
+    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
+    address: Annotated[str, Field(description="Target address (IP, hostname, or URL)")],
+    target_type: Annotated[str, Field(description="Type: web, host, service, network")] = "host",
+    ports: Annotated[list[int] | None, Field(description="Open ports")] = None,
+    services: Annotated[dict | None, Field(description="Port to service mapping")] = None,
+    technologies: Annotated[list[str] | None, Field(description="Detected technologies")] = None,
+) -> dict:
+    """Add a target to the assessment."""
+    from python.helpers.assessment_state import get_assessment_state, TargetData
+
+    try:
+        state = get_assessment_state(project_name)
+
+        target = TargetData(
+            type=target_type,
+            address=address,
+            status="discovered",
+            ports=ports or [],
+            services=services or {},
+            technologies=technologies or []
+        )
+
+        target_id = state.add_target(target)
+
+        return {"status": "success", "target_id": target_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# =============================================================================
+# END SECURITY ASSESSMENT TOOLS
+# =============================================================================
+
+
 async def _run_chat(
     context: AgentContext, message: str, attachments: list[str] | None = None
 ):

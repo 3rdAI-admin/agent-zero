@@ -125,7 +125,7 @@ Optionally you can map local folders for file persistence:
 > ```bash
 > docker run -p $PORT:80 -v /path/to/your/data:/a0 agent0ai/agent-zero
 > ```
-> - Replace `$PORT` with the port you want to use (e.g., `50080`)
+> - Replace `$PORT` with the port you want to use (e.g., `8888` so the UI is on http://your-host:8888)
 > - Replace `/path/to/your/data` with your chosen directory path
 
 2.4. Access the Web UI:

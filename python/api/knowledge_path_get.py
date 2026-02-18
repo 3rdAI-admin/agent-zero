@@ -1,5 +1,5 @@
 from python.helpers.api import ApiHandler, Request, Response
-from python.helpers import files, memory, notification, projects, notification
+from python.helpers import files, memory, notification, projects, notification, runtime
 import os
 from werkzeug.utils import secure_filename
 
@@ -17,7 +17,10 @@ class GetKnowledgePath(ApiHandler):
         else:
             knowledge_folder = memory.get_custom_knowledge_subdir_abs(context.agent0)
 
-        knowledge_folder = files.normalize_a0_path(knowledge_folder)
+        # For native installs, return actual path; for Docker, normalize to /a0/
+        if runtime.is_dockerized():
+            knowledge_folder = files.normalize_a0_path(knowledge_folder)
+        # For native installs, use the actual path as-is
 
         return {
             "ok": True,

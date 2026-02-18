@@ -1,0 +1,28 @@
+#!/bin/bash
+# Wrapper script to run Claude Code as non-root user with YOLO mode
+# Uses runuser to avoid password prompts when run as root
+
+CLAUDE_USER="claude"
+CLAUDE_HOME="/home/$CLAUDE_USER"
+
+# Check if claude user exists
+if ! id "$CLAUDE_USER" >/dev/null 2>&1; then
+    useradd -m -s /bin/bash "$CLAUDE_USER" || exit 1
+fi
+
+# Ensure Claude Code is installed
+if [ ! -f "$CLAUDE_HOME/.local/bin/claude" ]; then
+    echo "Installing Claude Code for $CLAUDE_USER user..." >&2
+    runuser -u "$CLAUDE_USER" -- bash -c "curl -fsSL https://claude.ai/install.sh | bash" || true
+fi
+
+# Run Claude Code as claude user with YOLO mode
+# Use claude-pro for consistency (symlink created by install_additional.sh)
+export HOME="$CLAUDE_HOME"
+export CLAUDE_CONFIG_DIR="$CLAUDE_HOME/.claude"
+
+if [ $# -eq 0 ]; then
+    exec runuser -u "$CLAUDE_USER" -- env HOME="$CLAUDE_HOME" PATH="$CLAUDE_HOME/.local/bin:$PATH" CLAUDE_CONFIG_DIR="$CLAUDE_CONFIG_DIR" claude-pro --dangerously-skip-permissions
+else
+    exec runuser -u "$CLAUDE_USER" -- env HOME="$CLAUDE_HOME" PATH="$CLAUDE_HOME/.local/bin:$PATH" CLAUDE_CONFIG_DIR="$CLAUDE_CONFIG_DIR" claude-pro --dangerously-skip-permissions -p "$@"
+fi

@@ -115,15 +115,19 @@ class ChatGenerationResult:
             # if the model outputs thinking tags, we ned to parse them manually as reasoning
             processed_chunk = self._process_thinking_chunk(chunk)
 
-        self.reasoning += processed_chunk["reasoning_delta"]
-        self.response += processed_chunk["response_delta"]
+        # Ensure reasoning_delta and response_delta are strings (not None)
+        reasoning_delta = processed_chunk["reasoning_delta"] or ""
+        response_delta = processed_chunk["response_delta"] or ""
+        
+        self.reasoning += reasoning_delta
+        self.response += response_delta
 
         return processed_chunk
 
     def _process_thinking_chunk(self, chunk: ChatChunk) -> ChatChunk:
-        response_delta = self.unprocessed + chunk["response_delta"]
+        response_delta = self.unprocessed + (chunk["response_delta"] or "")
         self.unprocessed = ""
-        return self._process_thinking_tags(response_delta, chunk["reasoning_delta"])
+        return self._process_thinking_tags(response_delta, chunk["reasoning_delta"] or "")
 
     def _process_thinking_tags(self, response: str, reasoning: str) -> ChatChunk:
         if self.thinking:
@@ -823,6 +827,10 @@ def _parse_chunk(chunk: Any) -> ChatChunk:
         if isinstance(message, dict)
         else getattr(message, "reasoning_content", "")
     )
+
+    # Ensure both are strings, not None
+    response_delta = response_delta or ""
+    reasoning_delta = reasoning_delta or ""
 
     return ChatChunk(reasoning_delta=reasoning_delta, response_delta=response_delta)
 

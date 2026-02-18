@@ -12,6 +12,22 @@ important: check code for placeholders or demo data; replace with real variables
 don't use with other tools except thoughts; wait for response before using others
 check dependencies before running code
 output may end with [SYSTEM: ...] information comming from framework, not terminal
+
+**Claude Code Integration**: Claude Code (claude-pro) is installed and available in this container. Use it for AI-powered code generation, code review, debugging assistance, and technical questions.
+
+**Usage**: Use `claude-pro-yolo` wrapper for autonomous operation (YOLO mode enabled):
+```
+claude-pro-yolo 'your task here'
+```
+
+**IMPORTANT**: Always use `claude-pro-yolo` (not `claude-pro --dangerously-skip-permissions`) when running as root. The `--dangerously-skip-permissions` flag cannot be used as root, but `claude-pro-yolo` wrapper runs Claude Code as a non-root user with YOLO mode enabled.
+
+Example use cases:
+- Code review: `claude-pro-yolo 'Review this code for security vulnerabilities'`
+- Code generation: `claude-pro-yolo 'Write a Python function to parse Nmap XML'`
+- Analysis: `claude-pro-yolo 'Analyze this error log and identify the root cause'`
+
+Always use `claude-pro-yolo` for autonomous operation without confirmation prompts. Claude Code can generate code that you can then execute using this tool's python or nodejs runtime.
 usage:
 
 1 execute python code
@@ -76,6 +92,23 @@ usage:
     "tool_args": {
         "runtime": "reset",
         "session": 0,
+    }
+}
+~~~
+
+3 use Claude Code for code review/generation (YOLO mode)
+~~~json
+{
+    "thoughts": [
+        "Need expert code analysis...",
+        "Claude Code can help with this...",
+    ],
+    "headline": "Using Claude Code to review code for vulnerabilities",
+    "tool_name": "code_execution_tool",
+    "tool_args": {
+        "runtime": "terminal",
+        "session": 0,
+        "code": "claude-pro-yolo 'Review this Python code for security vulnerabilities and suggest fixes: def login(user, pwd): return db.query(f\"SELECT * FROM users WHERE user={user} AND pass={pwd}\")'"
     }
 }
 ~~~

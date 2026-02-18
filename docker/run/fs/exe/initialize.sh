@@ -19,5 +19,8 @@ chmod 444 /root/.profile
 # update package list to save time later
 apt-get update > /dev/null 2>&1 &
 
+# Generate self-signed SSL cert for HTTPS (enables browser microphone access)
+bash /exe/generate_ssl_cert.sh
+
 # let supervisord handle the services
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
