@@ -43,27 +43,23 @@ fi
 echo ""
 
 if [ -n "$TOKEN" ]; then
-    # Test MCP endpoint
+    # Test MCP endpoint (Agent Zero serves MCP over HTTPS only)
     echo -e "${BLUE}[Step 2] Testing MCP endpoint...${NC}"
-    MCP_URL="http://localhost:8888/mcp/t-${TOKEN}/sse"
+    MCP_URL="https://localhost:8888/mcp/t-${TOKEN}/sse"
     echo "   URL: $MCP_URL"
     
-    # Test from host (if accessible) or container
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$MCP_URL" 2>&1 || echo "000")
+    # Test from host: use HTTPS and expect SSE stream (curl may not get 200 for long-lived SSE)
+    SSE_HIT=$(curl -s -k -N -H "Accept: text/event-stream" --connect-timeout 3 "$MCP_URL" 2>/dev/null & PID=$!; sleep 2; kill $PID 2>/dev/null; wait $PID 2>/dev/null; true)
+    RESPONSE="000"
+    echo "$SSE_HIT" | grep -q "event: endpoint" && RESPONSE="200"
     
     if [ "$RESPONSE" = "200" ]; then
-        echo -e "${GREEN}✅ MCP endpoint is accessible (Status: 200)${NC}"
-    elif [ "$RESPONSE" = "401" ]; then
-        echo -e "${YELLOW}⚠️  Authentication required (Status: 401)${NC}"
-        echo "   This might be normal - MCP may require specific headers"
-    elif [ "$RESPONSE" = "404" ]; then
-        echo -e "${RED}❌ MCP endpoint not found (Status: 404)${NC}"
-        echo "   Check: Is Agent Zero MCP server enabled?"
+        echo -e "${GREEN}✅ MCP endpoint is accessible (SSE event received)${NC}"
     elif [ "$RESPONSE" = "000" ]; then
-        echo -e "${YELLOW}⚠️  Could not connect from host${NC}"
+        echo -e "${YELLOW}⚠️  Could not connect from host (use HTTPS, not HTTP)${NC}"
         echo "   Testing from inside container..."
-        CONTAINER_RESPONSE=$(docker exec agent-zero bash -c "curl -s -o /dev/null -w '%{http_code}' 'http://localhost:80/mcp/t-${TOKEN}/sse' 2>&1" || echo "000")
-        if [ "$CONTAINER_RESPONSE" = "200" ] || [ "$CONTAINER_RESPONSE" = "401" ]; then
+        CONTAINER_HIT=$(docker exec agent-zero bash -c "curl -s -k -N --max-time 2 -H 'Accept: text/event-stream' 'https://localhost:80/mcp/t-${TOKEN}/sse' 2>/dev/null" || true)
+        if echo "$CONTAINER_HIT" | grep -q "event: endpoint"; then
             echo -e "${GREEN}✅ MCP endpoint accessible from container${NC}"
         else
             echo -e "${RED}❌ MCP endpoint not accessible${NC}"

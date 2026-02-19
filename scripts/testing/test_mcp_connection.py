@@ -9,54 +9,45 @@ import httpx
 import sys
 import json
 
-async def test_mcp_connection(base_url: str, token: str):
-    """Test MCP connection to Agent Zero"""
-    
-    # MCP SSE endpoint
+async def test_mcp_connection(base_url: str, token: str, verify: bool = False):
+    """Test MCP connection to Agent Zero. Use verify=False for self-signed cert."""
+    # MCP SSE endpoint; Agent Zero serves HTTPS only
+    base_url = base_url.rstrip("/")
+    if not base_url.startswith("http"):
+        base_url = "https://" + base_url.lstrip("/")
     sse_url = f"{base_url}/mcp/t-{token}/sse"
-    
+
     print(f"Testing MCP connection to: {sse_url}")
+    print(f"TLS verify: {verify}")
     print("-" * 60)
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
+
+    async with httpx.AsyncClient(timeout=30.0, verify=verify) as client:
         try:
-            # Test 1: Check if endpoint exists
-            print("\n[Test 1] Checking MCP endpoint...")
-            response = await client.get(sse_url)
-            print(f"   Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                print("   ✅ MCP endpoint is accessible")
-            elif response.status_code == 401:
-                print("   ⚠️  Authentication required (this is expected)")
-            elif response.status_code == 404:
-                print("   ❌ MCP endpoint not found")
-                return False
-            else:
-                print(f"   ⚠️  Unexpected status: {response.status_code}")
-            
-            # Test 2: Try to connect via SSE (simplified check)
-            print("\n[Test 2] Testing SSE connection...")
-            try:
-                # SSE connections require streaming, so we'll just check headers
-                headers = {
-                    "Accept": "text/event-stream",
-                    "Cache-Control": "no-cache"
-                }
-                async with client.stream("GET", sse_url, headers=headers) as response:
-                    if response.status_code == 200:
-                        print("   ✅ SSE connection successful")
-                        # Try to read first line
-                        async for line in response.aiter_lines():
-                            if line:
-                                print(f"   📡 Received: {line[:100]}...")
-                                break
-                        return True
-                    else:
-                        print(f"   ⚠️  SSE connection returned: {response.status_code}")
-                        return False
-            except Exception as e:
-                print(f"   ⚠️  SSE connection error: {e}")
+            # SSE endpoint never closes; use stream and read first event only
+            print("\n[Test 1] Opening SSE stream and reading first event...")
+            headers = {
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+            }
+            async with client.stream("GET", sse_url, headers=headers) as response:
+                print(f"   Status: {response.status_code}")
+                if response.status_code == 401:
+                    print("   ❌ Invalid token (401)")
+                    return False
+                if response.status_code == 404:
+                    print("   ❌ MCP endpoint not found")
+                    return False
+                if response.status_code != 200:
+                    print(f"   ❌ Unexpected status: {response.status_code}")
+                    return False
+                # Read until we get the first event (endpoint)
+                async for line in response.aiter_lines():
+                    if line:
+                        print(f"   📡 {line[:80]}{'...' if len(line) > 80 else ''}")
+                        if line.startswith("event: endpoint") or "session_id" in line:
+                            print("   ✅ SSE connection OK (first event received)")
+                            return True
+                print("   ⚠️  No event received before stream end")
                 return False
                 
         except httpx.ConnectError:
@@ -83,14 +74,14 @@ async def main():
     print("Agent Zero MCP Connection Test")
     print("=" * 60)
     
-    # Get connection details
-    base_url = "http://localhost:8888"
+    # Get connection details: base_url and token (default HTTPS localhost)
+    base_url = "https://localhost:8888"
     token = None
-    
-    # Try to get token from environment or settings
-    if len(sys.argv) > 1:
+    if len(sys.argv) >= 2:
         token = sys.argv[1]
-    else:
+    if len(sys.argv) >= 3:
+        base_url = sys.argv[2]
+    if not token:
         # Try to read from container settings
         try:
             import subprocess
@@ -104,21 +95,20 @@ async def main():
                 token = settings.get("mcp_server_token", "")
         except Exception:
             pass
-    
+
     if not token:
         print("\n⚠️  MCP token not provided")
         print("\nTo get your MCP token:")
-        print("1. Log into Agent Zero Web UI at http://localhost:8888")
+        print("1. Log into Agent Zero Web UI (https://localhost:8888)")
         print("2. Go to Settings > MCP Server")
         print("3. Copy the token from the MCP Server URL")
-        print("\nOr provide token as argument:")
-        print("  python3 test_mcp_connection.py YOUR_TOKEN")
-        print("\nThe token is also generated from your username/password")
-        print("and can be found in Settings > External Services > API Token")
+        print("\nUsage:")
+        print("  python3 test_mcp_connection.py TOKEN [BASE_URL]")
+        print("  Example: python3 test_mcp_connection.py 11mu_QnUJiEWloEq https://192.168.50.7:8888")
         return
-    
-    # Test connection
-    success = await test_mcp_connection(base_url, token)
+
+    # Test connection (verify=False for self-signed cert)
+    success = await test_mcp_connection(base_url, token, verify=False)
     
     print("\n" + "=" * 60)
     if success:
@@ -139,7 +129,7 @@ async def main():
         print("❌ MCP Connection Test: FAILED")
         print("\nTroubleshooting:")
         print("1. Verify Agent Zero is running: docker ps | grep agent-zero")
-        print("2. Check Web UI is accessible: curl http://localhost:8888")
+        print("2. Check Web UI: curl -k https://localhost:8888")
         print("3. Verify token is correct (from Settings > MCP Server)")
     print("=" * 60)
 

@@ -12,6 +12,10 @@ services:
     environment:
       # Claude Code config directory - persists OAuth credentials
       - CLAUDE_CONFIG_DIR=/home/claude/.claude
+      # For remote MCP/A2A clients: add host LAN IP to TLS cert so https://<IP>:8888 matches (default cert has localhost only)
+      - AGENT_ZERO_CERT_IPS=192.168.50.7
+      # Uncomment below once to regenerate cert with the IP above after first deploy, then remove to avoid regenerating every start
+      # - AGENT_ZERO_REGENERATE_CERT=1
     ports:
       - "${HOST_PORT:-8888}:80"  # Web UI accessible on port 8888
       - "5901:5900"  # VNC server for browser access (CAPTCHA completion) - use 5901 to avoid conflicts

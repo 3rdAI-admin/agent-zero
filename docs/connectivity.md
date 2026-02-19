@@ -583,3 +583,16 @@ To connect another agent to your Agent Zero instance, use the following URL form
 ```
 YOUR_AGENT_ZERO_URL/a2a/t-YOUR_API_TOKEN
 ```
+
+### A2A and TLS (remote clients)
+
+Agent Zero serves both MCP and A2A over **HTTPS** with the same self-signed certificate. When a remote client (e.g. PCI-DSS Assistant) connects to `https://<host>:8888/a2a/t-<token>`, it may fail with:
+
+- **`SSL::CERTIFICATE_VERIFY_FAILED` / "certificate verify failed:self-signed certificate"** – The client is verifying the server certificate and rejecting the self-signed cert.
+
+**Fix:**
+
+1. **On the client (e.g. PCI-DSS Assistant):** Enable **skip TLS verification** (or "allow self-signed certificates") for the Agent Zero A2A agent URL. Use the same approach as for MCP: the client must not verify the server certificate for this host.
+2. **On Agent Zero:** Set `AGENT_ZERO_CERT_IPS=<your-LAN-IP>` (e.g. `192.168.50.7`) in docker-compose `environment`, then recreate the container (`docker compose down && docker compose up -d`) so the certificate includes that IP. That way the cert matches when connecting to `https://192.168.50.7:8888` and avoids hostname mismatch after verification is skipped.
+
+If the client app does not expose a "skip TLS verify" option for A2A agents, it needs to be added (same as for MCP).
