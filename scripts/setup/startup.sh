@@ -103,7 +103,9 @@ fi
 log_info "Container status:"
 "${DOCKER_COMPOSE_CMD[@]}" ps agent-zero
 
-HOST_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
+HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -z "$HOST_IP" ] && HOST_IP=$(ipconfig getifaddr en0 2>/dev/null)
+[ -z "$HOST_IP" ] && HOST_IP="localhost"
 echo ""
 log_success "═══════════════════════════════════════"
 log_success "Agent Zero Docker stack is running!"

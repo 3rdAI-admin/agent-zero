@@ -198,7 +198,7 @@ async def finish_chat(
             description="ID of the chat to be finished. This value is returned in response to sending previous message.",
             title="chat_id",
         ),
-    ]
+    ],
 ) -> Annotated[
     Union[ToolResponse, ToolError],
     Field(
@@ -236,10 +236,16 @@ Target must be in-scope for the active assessment.
 )
 async def network_scan(
     target: Annotated[str, Field(description="Target IP, hostname, or CIDR range")],
-    ports: Annotated[str, Field(description="Port specification (e.g., '22,80,443' or '1-1000')")] = "1-1000",
+    ports: Annotated[
+        str, Field(description="Port specification (e.g., '22,80,443' or '1-1000')")
+    ] = "1-1000",
     scan_type: Annotated[str, Field(description="Scan type: tcp, syn, udp")] = "tcp",
-    service_detection: Annotated[bool, Field(description="Enable service version detection")] = True,
-    project_name: Annotated[str | None, Field(description="Project name for scope validation")] = None,
+    service_detection: Annotated[
+        bool, Field(description="Enable service version detection")
+    ] = True,
+    project_name: Annotated[
+        str | None, Field(description="Project name for scope validation")
+    ] = None,
 ) -> dict:
     """Run network scan with scope validation."""
     from python.tools.security.network_scanner import NetworkScanner
@@ -257,7 +263,7 @@ async def network_scan(
         target=target,
         ports=ports,
         scan_type=scan_type,
-        service_detection=service_detection
+        service_detection=service_detection,
     )
 
     if not success:
@@ -272,17 +278,19 @@ async def network_scan(
                 "protocol": p.protocol,
                 "state": p.state,
                 "service": p.service,
-                "version": p.version
+                "version": p.version,
             }
             for p in host.ports
         ]
-        hosts.append({
-            "address": host.address,
-            "hostname": host.hostname,
-            "state": host.state,
-            "ports": ports_data,
-            "os_matches": host.os_matches
-        })
+        hosts.append(
+            {
+                "address": host.address,
+                "hostname": host.hostname,
+                "state": host.state,
+                "ports": ports_data,
+                "os_matches": host.os_matches,
+            }
+        )
 
     return {"status": "success", "hosts": hosts, "host_count": len(hosts)}
 
@@ -300,9 +308,15 @@ Use for web server scanning, vulnerability detection, and technology fingerprint
 )
 async def web_scan(
     target: Annotated[str, Field(description="Target URL (e.g., https://example.com)")],
-    scan_type: Annotated[str, Field(description="Scan type: nikto, nuclei, quick")] = "quick",
-    severity_filter: Annotated[str | None, Field(description="Filter by severity: critical,high,medium,low")] = None,
-    project_name: Annotated[str | None, Field(description="Project name for scope validation")] = None,
+    scan_type: Annotated[
+        str, Field(description="Scan type: nikto, nuclei, quick")
+    ] = "quick",
+    severity_filter: Annotated[
+        str | None, Field(description="Filter by severity: critical,high,medium,low")
+    ] = None,
+    project_name: Annotated[
+        str | None, Field(description="Project name for scope validation")
+    ] = None,
 ) -> dict:
     """Run web vulnerability scan."""
     from python.tools.security.web_scanner import WebScanner
@@ -323,7 +337,11 @@ async def web_scan(
         success, findings, raw = WebScanner.nuclei_scan(target, severity=severity)
     else:  # quick
         success, results, summary = WebScanner.quick_web_scan(target)
-        return {"status": "success" if success else "error", "results": results, "summary": summary}
+        return {
+            "status": "success" if success else "error",
+            "results": results,
+            "summary": summary,
+        }
 
     if not success:
         return {"status": "error", "error": raw}
@@ -334,12 +352,16 @@ async def web_scan(
             "title": f.title,
             "description": f.description,
             "target": f.target,
-            "evidence": f.evidence
+            "evidence": f.evidence,
         }
         for f in findings
     ]
 
-    return {"status": "success", "findings": findings_data, "finding_count": len(findings)}
+    return {
+        "status": "success",
+        "findings": findings_data,
+        "finding_count": len(findings),
+    }
 
 
 CODE_REVIEW_DESCRIPTION = """
@@ -355,8 +377,12 @@ Analyzes code for security vulnerabilities, insecure patterns, and best practice
 )
 async def code_review(
     path: Annotated[str, Field(description="Path to file or directory to scan")],
-    language: Annotated[str | None, Field(description="Language hint: python, javascript, auto")] = "auto",
-    severity_filter: Annotated[str | None, Field(description="Minimum severity: low, medium, high")] = None,
+    language: Annotated[
+        str | None, Field(description="Language hint: python, javascript, auto")
+    ] = "auto",
+    severity_filter: Annotated[
+        str | None, Field(description="Minimum severity: low, medium, high")
+    ] = None,
 ) -> dict:
     """Run static code analysis."""
     from python.tools.security.code_scanner import CodeScanner
@@ -373,18 +399,26 @@ async def code_review(
         all_findings = []
         for scanner, findings in results.items():
             for f in findings:
-                all_findings.append({
-                    "scanner": scanner,
-                    "file": f.file,
-                    "line": f.line,
-                    "severity": f.severity,
-                    "rule_id": f.rule_id,
-                    "message": f.message,
-                    "cwe": f.cwe
-                })
-        return {"status": "success" if success else "error", "findings": all_findings, "summary": summary}
+                all_findings.append(
+                    {
+                        "scanner": scanner,
+                        "file": f.file,
+                        "line": f.line,
+                        "severity": f.severity,
+                        "rule_id": f.rule_id,
+                        "message": f.message,
+                        "cwe": f.cwe,
+                    }
+                )
+        return {
+            "status": "success" if success else "error",
+            "findings": all_findings,
+            "summary": summary,
+        }
     elif language == "python":
-        success, findings, raw = CodeScanner.bandit_scan(path, severity=severity_filter or "low")
+        success, findings, raw = CodeScanner.bandit_scan(
+            path, severity=severity_filter or "low"
+        )
     else:
         success, findings, raw = CodeScanner.semgrep_scan(path)
 
@@ -398,12 +432,16 @@ async def code_review(
             "severity": f.severity,
             "rule_id": f.rule_id,
             "message": f.message,
-            "cwe": f.cwe
+            "cwe": f.cwe,
         }
         for f in findings
     ]
 
-    return {"status": "success", "findings": findings_data, "finding_count": len(findings)}
+    return {
+        "status": "success",
+        "findings": findings_data,
+        "finding_count": len(findings),
+    }
 
 
 GET_ASSESSMENT_STATE_DESCRIPTION = """
@@ -446,11 +484,21 @@ Use to record vulnerabilities discovered during testing.
 async def update_finding_tool(
     project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
     title: Annotated[str, Field(description="Finding title")],
-    severity: Annotated[str, Field(description="Severity: critical, high, medium, low, info")],
-    description: Annotated[str, Field(description="Detailed description of the finding")],
-    affected: Annotated[list[str] | None, Field(description="List of affected targets/URLs")] = None,
-    cwe: Annotated[str | None, Field(description="CWE identifier (e.g., CWE-89)")] = None,
-    evidence: Annotated[str | None, Field(description="Evidence or proof-of-concept")] = None,
+    severity: Annotated[
+        str, Field(description="Severity: critical, high, medium, low, info")
+    ],
+    description: Annotated[
+        str, Field(description="Detailed description of the finding")
+    ],
+    affected: Annotated[
+        list[str] | None, Field(description="List of affected targets/URLs")
+    ] = None,
+    cwe: Annotated[
+        str | None, Field(description="CWE identifier (e.g., CWE-89)")
+    ] = None,
+    evidence: Annotated[
+        str | None, Field(description="Evidence or proof-of-concept")
+    ] = None,
     remediation: Annotated[str | None, Field(description="Recommended fix")] = None,
 ) -> dict:
     """Add or update a finding."""
@@ -467,12 +515,14 @@ async def update_finding_tool(
             cwe=cwe or "",
             remediation=remediation or "",
             found_by="claude_code",
-            status="potential"
+            status="potential",
         )
 
         # Save evidence if provided
         if evidence:
-            evidence_path = state.save_evidence(f"{title.replace(' ', '_')}.txt", evidence)
+            evidence_path = state.save_evidence(
+                f"{title.replace(' ', '_')}.txt", evidence
+            )
             if evidence_path:
                 finding["evidence"] = [evidence_path]
 
@@ -497,10 +547,16 @@ Use to track discovered hosts, services, or web applications.
 async def add_target_tool(
     project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
     address: Annotated[str, Field(description="Target address (IP, hostname, or URL)")],
-    target_type: Annotated[str, Field(description="Type: web, host, service, network")] = "host",
+    target_type: Annotated[
+        str, Field(description="Type: web, host, service, network")
+    ] = "host",
     ports: Annotated[list[int] | None, Field(description="Open ports")] = None,
-    services: Annotated[dict | None, Field(description="Port to service mapping")] = None,
-    technologies: Annotated[list[str] | None, Field(description="Detected technologies")] = None,
+    services: Annotated[
+        dict | None, Field(description="Port to service mapping")
+    ] = None,
+    technologies: Annotated[
+        list[str] | None, Field(description="Detected technologies")
+    ] = None,
 ) -> dict:
     """Add a target to the assessment."""
     from python.helpers.assessment_state import get_assessment_state, TargetData
@@ -514,7 +570,7 @@ async def add_target_tool(
             status="discovered",
             ports=ports or [],
             services=services or {},
-            technologies=technologies or []
+            technologies=technologies or [],
         )
 
         target_id = state.add_target(target)
@@ -634,9 +690,14 @@ class DynamicMcpProxy:
                 mcp_server._additional_http_routes,
             )
 
-    def _create_custom_http_app(self, streamable_http_path, auth_server_provider, auth_settings, debug, routes):
+    def _create_custom_http_app(
+        self, streamable_http_path, auth_server_provider, auth_settings, debug, routes
+    ):
         """Create a custom HTTP app that manages the session manager manually."""
-        from fastmcp.server.http import setup_auth_middleware_and_routes, create_base_app
+        from fastmcp.server.http import (
+            setup_auth_middleware_and_routes,
+            create_base_app,
+        )
         from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
         from starlette.routing import Mount
         from mcp.server.auth.middleware.bearer_auth import RequireAuthMiddleware
@@ -647,7 +708,6 @@ class DynamicMcpProxy:
 
         self.http_session_task_group = None
 
-
         # Create session manager
         self.http_session_manager = StreamableHTTPSessionManager(
             app=mcp_server._mcp_server,
@@ -655,7 +715,6 @@ class DynamicMcpProxy:
             json_response=True,
             stateless=False,
         )
-
 
         # Custom ASGI handler that ensures task group is initialized
         async def handle_streamable_http(scope, receive, send):
@@ -670,8 +729,8 @@ class DynamicMcpProxy:
                 await self.http_session_manager.handle_request(scope, receive, send)
 
         # Get auth middleware and routes
-        auth_middleware, auth_routes, required_scopes = setup_auth_middleware_and_routes(
-            auth_server_provider, auth_settings
+        auth_middleware, auth_routes, required_scopes = (
+            setup_auth_middleware_and_routes(auth_server_provider, auth_settings)
         )
 
         server_routes.extend(auth_routes)
@@ -698,7 +757,9 @@ class DynamicMcpProxy:
             server_routes.extend(routes)
 
         # Add middleware
-        server_middleware.append(Middleware(BaseHTTPMiddleware, dispatch=mcp_middleware))
+        server_middleware.append(
+            Middleware(BaseHTTPMiddleware, dispatch=mcp_middleware)
+        )
 
         # Create and return the app
         return create_base_app(
@@ -726,13 +787,10 @@ class DynamicMcpProxy:
             # Route to HTTP app
             await http_app(scope, receive, send)
         else:
-            raise StarletteHTTPException(
-                status_code=403, detail="MCP forbidden"
-            )
+            raise StarletteHTTPException(status_code=403, detail="MCP forbidden")
 
 
 async def mcp_middleware(request: Request, call_next):
-
     # check if MCP server is enabled
     cfg = settings.get_settings()
     if not cfg["mcp_server_enabled"]:

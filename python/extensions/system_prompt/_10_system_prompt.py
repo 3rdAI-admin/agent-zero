@@ -7,12 +7,11 @@ from python.helpers import projects
 
 
 class SystemPrompt(Extension):
-
     async def execute(
         self,
         system_prompt: list[str] = [],
         loop_data: LoopData = LoopData(),
-        **kwargs: Any
+        **kwargs: Any,
     ):
         # append main system prompt and tools
         main = get_main_prompt(self.agent)
@@ -64,7 +63,7 @@ def get_secrets_prompt(agent: Agent):
         secrets = secrets_manager.get_secrets_for_prompt()
         vars = get_settings()["variables"]
         return agent.read_prompt("agent.system.secrets.md", secrets=secrets, vars=vars)
-    except Exception as e:
+    except Exception:
         # If secrets module is not available or has issues, return empty string
         return ""
 

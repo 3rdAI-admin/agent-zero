@@ -76,7 +76,7 @@ Ask Agent Zero: "Use Claude Code to [your task]"
 **Example**:
 ```
 You: "Use Claude Code to write a Python function that validates email addresses"
-Agent Zero: [invokes claude-pro, gets code, executes it, shows results]
+Agent Zero: [invokes claude-pro-yolo, gets code, executes it, shows results]
 ```
 
 **Authentication**:
@@ -102,7 +102,7 @@ Agent Zero: [invokes claude-pro, gets code, executes it, shows results]
 - `NET_RAW`, `NET_ADMIN`, `SYS_ADMIN` for raw sockets
 - Host gateway access: `host.docker.internal`
 
-**Documentation**: See [Security Setup](../SECURITY_SETUP.md)
+**Documentation**: See [Security Setup](./guides/SECURITY_SETUP.md)
 
 ### ✅ Network Access
 
@@ -126,8 +126,12 @@ ports:
   - "5901:5900"              # VNC server
 
 volumes:
-  - ./.env:/a0/.env                            # Auth & API keys (persistent)
-  - ./claude-config:/root/.config/claude-code  # Claude Code OAuth
+  - ./.env:/a0/.env                                          # Auth & API keys (persistent)
+  - ./claude-config:/root/.config/claude-code                # Claude Code OAuth (root)
+  - ./claude-config:/home/claude/.config/claude-code         # Claude Code OAuth (claude user)
+  - ./claude-credentials:/home/claude/.claude                # Claude Code credential tokens
+  - ./claude-keyring:/home/claude/.local/share/python_keyring  # Keyring data
+  - ./claude-gnome-keyring:/home/claude/.local/share/keyrings  # GNOME keyring data
 
 cap_add:
   - NET_RAW      # Network scanning
@@ -139,15 +143,58 @@ cap_add:
 
 **`.env` file** (bind-mounted into container at `/a0/.env`):
 ```bash
-HOST_PORT=8888          # Web UI port
-BRANCH=local            # Git branch for build
 AUTH_LOGIN=th3rdai      # Web UI username
 AUTH_PASSWORD=...       # Web UI password
 # API keys (API_KEY_OPENAI, API_KEY_ANTHROPIC, etc.)
+
+# LAN/Remote access (comma-separated, NOT semicolons)
+ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 ```
 
 > **Note**: The `.env` file is volume-mounted so that authentication credentials
 > and API keys persist across container recreations (`docker compose down && up`).
+
+### HTTPS / TLS
+
+Agent Zero serves HTTPS inside the container. The healthcheck uses `https://localhost`. For local access on the host, `http://localhost:8888` works because the host port maps to the container's HTTPS port 80.
+
+For **remote MCP or A2A clients** that connect via `https://<LAN-IP>:8888`, the self-signed TLS certificate must include the host's LAN IP in its Subject Alternative Names (SAN). Configure this in `docker-compose.yml`:
+
+```yaml
+environment:
+  # Add your host LAN IP to the TLS certificate
+  - AGENT_ZERO_CERT_IPS=192.168.50.7
+  # Uncomment ONCE to regenerate cert, then re-comment to avoid regenerating every start
+  # - AGENT_ZERO_REGENERATE_CERT=1
+```
+
+After changing `AGENT_ZERO_CERT_IPS`, uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart the container, then comment it out again.
+
+### Authentication & LAN Access
+
+Agent Zero uses CSRF protection that blocks non-localhost origins by default. To access the Web UI from another device on your LAN, you need **at least one** of:
+
+1. **Authentication enabled (recommended)**: Set both `AUTH_LOGIN` and `AUTH_PASSWORD` in `.env`. When login is enabled, the origin check is bypassed after authentication.
+2. **ALLOWED_ORIGINS configured**: Add your IP to the `ALLOWED_ORIGINS` variable in `.env`. Origins must be **comma-separated** (not semicolons).
+
+**Default allowed origins** (when `ALLOWED_ORIGINS` is not set):
+- `*://localhost:*`
+- `*://127.0.0.1:*`
+- `*://0.0.0.0:*`
+
+**Common error**: `"Origin http://192.168.x.x:8888 not allowed when login is disabled"` — this means you need to either enable authentication or add your IP to `ALLOWED_ORIGINS`.
+
+### Settings Persistence
+
+Settings are stored in two locations:
+
+| What | Where | Persists via |
+|------|-------|-------------|
+| Auth credentials (`AUTH_LOGIN`, `AUTH_PASSWORD`) | `.env` only | Bind mount `./.env:/a0/.env` |
+| API keys | `.env` only | Bind mount `./.env:/a0/.env` |
+| Model config, memory settings, etc. | `tmp/settings.json` | Bind mount `./tmp:/a0/tmp` |
+
+> **Important**: Auth credentials are explicitly stripped from `tmp/settings.json` for security. They are stored only in `.env`. Both files persist across `docker compose down && up` and image rebuilds via bind mounts.
 
 ## Common Tasks
 
@@ -186,7 +233,7 @@ vncviewer localhost:5901
 **Via VNC Terminal**:
 1. Connect to VNC
 2. Open terminal
-3. Run: `claude-pro "your question"`
+3. Run: `claude-pro-yolo "your question"`
 
 ### Run Security Scans
 
@@ -213,7 +260,7 @@ docker ps --filter name=agent-zero
 docker exec agent-zero supervisorctl status | grep -E "(vnc|xvfb|fluxbox)"
 
 # Claude Code
-docker exec agent-zero claude-pro --version
+docker exec agent-zero claude-pro-yolo --version
 ```
 
 ### Test Integration
@@ -256,7 +303,7 @@ docker exec agent-zero supervisorctl restart xvfb fluxbox x11vnc
 
 **Check installation**:
 ```bash
-docker exec agent-zero which claude-pro
+docker exec agent-zero which claude-pro-yolo
 ```
 
 **Check PATH**:
@@ -303,14 +350,18 @@ docker compose restart
 - `./memory` - Agent Zero memory
 - `./knowledge` - Knowledge base
 - `./logs` - Logs
-- `./tmp` - Temporary files
-- `./claude-config` - Claude Code OAuth tokens
+- `./tmp` - Temporary files and settings
+- `./claude-config` - Claude Code OAuth config
+- `./claude-credentials` - Claude Code credential tokens
+- `./claude-keyring` - Claude keyring data
+- `./claude-gnome-keyring` - GNOME keyring data
 
 **Backup**:
 ```bash
 # Backup all data
 tar -czf agent-zero-backup-$(date +%Y%m%d).tar.gz \
-  .env memory/ knowledge/ logs/ tmp/ claude-config/
+  .env memory/ knowledge/ logs/ tmp/ claude-config/ \
+  claude-credentials/ claude-keyring/ claude-gnome-keyring/
 ```
 
 ### Clean Up
@@ -358,7 +409,7 @@ Claude Code is installed during Docker build and persists across restarts. OAuth
 
 - [VNC Access Guide](VNC_ACCESS.md) - Complete VNC setup and usage
 - [Claude Code Integration](CLAUDE_CODE_INTEGRATION.md) - Claude Code integration details
-- [Security Setup](../SECURITY_SETUP.md) - Security tools and network configuration
+- [Security Setup](./guides/SECURITY_SETUP.md) - Security tools and network configuration
 - [Installation Guide](installation.md) - Basic installation
 - [Usage Guide](usage.md) - Agent Zero usage
 

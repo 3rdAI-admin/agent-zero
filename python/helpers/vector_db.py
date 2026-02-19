@@ -3,7 +3,6 @@ import uuid
 from langchain_community.vectorstores import FAISS
 
 # faiss needs to be patched for python 3.12 on arm #TODO remove once not needed
-from python.helpers import faiss_monkey_patch
 import faiss
 
 
@@ -23,7 +22,11 @@ class MyFaiss(FAISS):
     # override aget_by_ids
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         # return all self.docstore._dict[id] in ids
-        return [self.docstore._dict[id] for id in (ids if isinstance(ids, list) else [ids]) if id in self.docstore._dict]  # type: ignore
+        return [
+            self.docstore._dict[id]
+            for id in (ids if isinstance(ids, list) else [ids])
+            if id in self.docstore._dict
+        ]  # type: ignore
 
     async def aget_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         return self.get_by_ids(ids)
@@ -33,7 +36,6 @@ class MyFaiss(FAISS):
 
 
 class VectorDB:
-
     _cached_embeddings: dict[str, CacheBackedEmbeddings] = {}
 
     @staticmethod
@@ -143,7 +145,7 @@ def get_comparator(condition: str):
         try:
             result = simple_eval(condition, {}, data)
             return result
-        except Exception as e:
+        except Exception:
             # PrintStyle.error(f"Error evaluating condition: {e}")
             return False
 

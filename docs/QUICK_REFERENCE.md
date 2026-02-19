@@ -202,6 +202,8 @@ HOST_PORT=9000 docker compose up -d
 | `HOST_PORT` | `8888` | Web UI port on host |
 | `BRANCH` | `local` | Git branch for build |
 | `CLAUDE_CONFIG_DIR` | `/home/claude/.claude` | Claude Code credential storage |
+| `AGENT_ZERO_CERT_IPS` | *(none)* | LAN IPs to add to TLS cert SAN (in `docker-compose.yml`) |
+| `AGENT_ZERO_REGENERATE_CERT` | *(none)* | Set to `1` to regenerate TLS cert (then remove) |
 
 ## Useful Scripts
 

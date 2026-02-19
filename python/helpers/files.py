@@ -1,25 +1,22 @@
 from abc import ABC, abstractmethod
 from fnmatch import fnmatch
 import json
-from ntpath import isabs
 import os
-import sys
 import re
 import base64
 import shutil
 import tempfile
 from typing import Any
 import zipfile
-import importlib
-import importlib.util
-import inspect
 import glob
 import mimetypes
 
 
 class VariablesPlugin(ABC):
     @abstractmethod
-    def get_variables(self, file: str, backup_dirs: list[str] | None = None, **kwargs) -> dict[str, Any]:  # type: ignore
+    def get_variables(
+        self, file: str, backup_dirs: list[str] | None = None, **kwargs
+    ) -> dict[str, Any]:  # type: ignore
         pass
 
 
@@ -41,7 +38,6 @@ def load_plugin_variables(
         plugin_file = None
 
     if plugin_file and exists(plugin_file):
-
         from python.helpers import extract_tools
 
         classes = extract_tools.load_classes_from_file(
@@ -347,7 +343,7 @@ def delete_dir(relative_path: str):
 
                 # try again after changing permissions
                 shutil.rmtree(abs_path, ignore_errors=True)
-            except:
+            except Exception:
                 # suppress all errors - we're ensuring no errors propagate
                 pass
 
@@ -510,7 +506,6 @@ def safe_file_name(filename: str) -> str:
 def read_text_files_in_dir(
     dir_path: str, max_size: int = 1024 * 1024
 ) -> dict[str, str]:
-
     abs_path = get_abs_path(dir_path)
     if not os.path.exists(abs_path):
         return {}
@@ -531,6 +526,7 @@ def read_text_files_in_dir(
             continue
     return result
 
+
 def list_files_in_dir_recursively(relative_path: str) -> list[str]:
     abs_path = get_abs_path(relative_path)
     if not os.path.exists(abs_path):
@@ -543,4 +539,3 @@ def list_files_in_dir_recursively(relative_path: str) -> list[str]:
             rel_path = os.path.relpath(file_path, abs_path)
             result.append(rel_path)
     return result
-    

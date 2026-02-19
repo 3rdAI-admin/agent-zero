@@ -1,8 +1,8 @@
 from python.helpers.api import ApiHandler, Request, Response
 from python.helpers import errors, git
 
-class HealthCheck(ApiHandler):
 
+class HealthCheck(ApiHandler):
     @classmethod
     def requires_auth(cls) -> bool:
         return False

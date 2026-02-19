@@ -16,14 +16,16 @@ except ImportError:  # pragma: no cover
     pytest = None
 
 if pytest is not None:
-    pytestmark = pytest.mark.skip(reason="Visualization utility; excluded from automated test runs.")
+    pytestmark = pytest.mark.skip(
+        reason="Visualization utility; excluded from automated test runs."
+    )
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from python.helpers.file_tree import (
+from python.helpers.file_tree import (  # noqa: E402
     OUTPUT_MODE_FLAT,
     OUTPUT_MODE_NESTED,
     OUTPUT_MODE_STRING,
@@ -34,7 +36,7 @@ from python.helpers.file_tree import (
     SORT_DESC,
     file_tree,
 )
-from python.helpers.files import create_dir, delete_dir, get_abs_path, write_file
+from python.helpers.files import create_dir, delete_dir, get_abs_path, write_file  # noqa: E402
 
 
 BASE_TEMP_ROOT = "tmp/tests/file_tree/visualize"
@@ -125,7 +127,9 @@ def _set_entry_times(relative_path: str, timestamp: float) -> None:
     time.sleep(0.01)
 
 
-def _apply_timestamps(base_rel: str, paths: List[str], base_ts: Optional[float] = None) -> None:
+def _apply_timestamps(
+    base_rel: str, paths: List[str], base_ts: Optional[float] = None
+) -> None:
     if base_ts is None:
         base_ts = time.time()
     for offset, rel in enumerate(paths, start=1):

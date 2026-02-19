@@ -101,6 +101,7 @@ class AssessmentState:
     def _get_assessment_dir(self) -> str:
         """Get the assessment directory path for this project."""
         from python.helpers.projects import get_project_meta_folder
+
         return get_project_meta_folder(self.project_name, ASSESSMENT_DIR)
 
     def _get_state_file_path(self) -> str:
@@ -112,7 +113,7 @@ class AssessmentState:
         return os.path.join(self._get_assessment_dir(), EVIDENCE_DIR)
 
     @contextmanager
-    def _file_lock(self, filepath: str, mode: str = 'r+'):
+    def _file_lock(self, filepath: str, mode: str = "r+"):
         """
         Context manager for file locking to ensure thread-safe operations.
 
@@ -125,7 +126,7 @@ class AssessmentState:
 
         # Create file if it doesn't exist
         if not os.path.exists(filepath):
-            with open(filepath, 'w') as f:
+            with open(filepath, "w") as f:
                 json.dump(self._get_default_state(), f, indent=2)
 
         f = open(filepath, mode)
@@ -147,21 +148,14 @@ class AssessmentState:
                 type="web",
                 started=datetime.utcnow().isoformat() + "Z",
                 status="in_progress",
-                methodology="OWASP WSTG"
+                methodology="OWASP WSTG",
             ),
             targets=[],
             findings=[],
             progress=ProgressData(
-                phase="recon",
-                current_task="",
-                completed_tasks=[],
-                pending_tasks=[]
+                phase="recon", current_task="", completed_tasks=[], pending_tasks=[]
             ),
-            context=ContextData(
-                notes="",
-                decisions=[],
-                credentials=[]
-            )
+            context=ContextData(notes="", decisions=[], credentials=[]),
         )
 
     def ensure_directories(self) -> None:
@@ -188,9 +182,11 @@ class AssessmentState:
             return self._get_default_state()
 
         try:
-            with self._file_lock(state_file, 'r') as f:
+            with self._file_lock(state_file, "r") as f:
                 data = json.load(f)
-                self._printer.print(f"[Assessment] Loaded state: {len(data.get('findings', []))} findings")
+                self._printer.print(
+                    f"[Assessment] Loaded state: {len(data.get('findings', []))} findings"
+                )
                 return data
         except json.JSONDecodeError as e:
             self._printer.print(f"[Assessment] Error parsing state file: {e}")
@@ -210,17 +206,25 @@ class AssessmentState:
         state_file = self._get_state_file_path()
 
         try:
-            with self._file_lock(state_file, 'w') as f:
+            with self._file_lock(state_file, "w") as f:
                 json.dump(state, f, indent=2, default=str)
-            self._printer.print(f"[Assessment] Saved state: {len(state.get('findings', []))} findings")
+            self._printer.print(
+                f"[Assessment] Saved state: {len(state.get('findings', []))} findings"
+            )
             return True
         except Exception as e:
             self._printer.print(f"[Assessment] Error saving state: {e}")
             return False
 
-    def initialize(self, name: str, scope: List[str],
-                   assessment_type: str = "web",
-                   methodology: str = "OWASP WSTG") -> AssessmentStateData:
+    def initialize(
+        self,
+        name: str,
+        scope: List[str],
+        assessment_type: Literal[
+            "web", "network", "internal", "external", "full"
+        ] = "web",
+        methodology: str = "OWASP WSTG",
+    ) -> AssessmentStateData:
         """
         Initialize a new assessment.
 
@@ -234,11 +238,13 @@ class AssessmentState:
             Initialized assessment state
         """
         state = self._get_default_state()
-        state["meta"]["name"] = name
-        state["meta"]["scope"] = scope
-        state["meta"]["type"] = assessment_type
-        state["meta"]["methodology"] = methodology
-        state["meta"]["started"] = datetime.utcnow().isoformat() + "Z"
+        meta = state.get("meta", MetaData())
+        meta["name"] = name
+        meta["scope"] = scope
+        meta["type"] = assessment_type
+        meta["methodology"] = methodology
+        meta["started"] = datetime.utcnow().isoformat() + "Z"
+        state["meta"] = meta
 
         self.save(state)
         self._printer.print(f"[Assessment] Initialized: {name} ({assessment_type})")
@@ -265,13 +271,17 @@ class AssessmentState:
             target["status"] = "discovered"
 
         # Check for duplicates by address
-        existing = next((t for t in state["targets"] if t.get("address") == target.get("address")), None)
+        targets = state.get("targets", [])
+        existing = next(
+            (t for t in targets if t.get("address") == target.get("address")), None
+        )
         if existing:
             # Update existing target
             existing.update(target)
             self._printer.print(f"[Assessment] Updated target: {target.get('address')}")
         else:
-            state["targets"].append(target)
+            targets.append(target)
+            state["targets"] = targets
             self._printer.print(f"[Assessment] Added target: {target.get('address')}")
 
         self.save(state)
@@ -301,10 +311,14 @@ class AssessmentState:
         if "status" not in finding:
             finding["status"] = "potential"
 
-        state["findings"].append(finding)
+        findings = state.get("findings", [])
+        findings.append(finding)
+        state["findings"] = findings
         self.save(state)
 
-        self._printer.print(f"[Assessment] Added finding: {finding.get('title')} ({finding.get('severity')})")
+        self._printer.print(
+            f"[Assessment] Added finding: {finding.get('title')} ({finding.get('severity')})"
+        )
         return finding["id"]
 
     def update_finding(self, finding_id: str, updates: dict) -> bool:
@@ -320,7 +334,8 @@ class AssessmentState:
         """
         state = self.load()
 
-        finding = next((f for f in state["findings"] if f.get("id") == finding_id), None)
+        findings = state.get("findings", [])
+        finding = next((f for f in findings if f.get("id") == finding_id), None)
         if not finding:
             self._printer.print(f"[Assessment] Finding not found: {finding_id}")
             return False
@@ -331,10 +346,13 @@ class AssessmentState:
         self._printer.print(f"[Assessment] Updated finding: {finding_id}")
         return True
 
-    def update_progress(self, phase: Optional[str] = None,
-                        current_task: Optional[str] = None,
-                        completed_task: Optional[str] = None,
-                        pending_task: Optional[str] = None) -> bool:
+    def update_progress(
+        self,
+        phase: Optional[str] = None,
+        current_task: Optional[str] = None,
+        completed_task: Optional[str] = None,
+        pending_task: Optional[str] = None,
+    ) -> bool:
         """
         Update assessment progress.
 
@@ -349,25 +367,35 @@ class AssessmentState:
         """
         state = self.load()
 
+        progress = state.get("progress", ProgressData())
+
         if phase:
-            state["progress"]["phase"] = phase
+            progress["phase"] = phase  # type: ignore[typeddict-item]
 
         if current_task is not None:
-            state["progress"]["current_task"] = current_task
+            progress["current_task"] = current_task
+
+        completed_tasks = progress.get("completed_tasks", [])
+        pending_tasks = progress.get("pending_tasks", [])
 
         if completed_task:
-            if completed_task not in state["progress"]["completed_tasks"]:
-                state["progress"]["completed_tasks"].append(completed_task)
-            # Remove from pending if present
-            if completed_task in state["progress"]["pending_tasks"]:
-                state["progress"]["pending_tasks"].remove(completed_task)
+            if completed_task not in completed_tasks:
+                completed_tasks.append(completed_task)
+            if completed_task in pending_tasks:
+                pending_tasks.remove(completed_task)
 
         if pending_task:
-            if pending_task not in state["progress"]["pending_tasks"]:
-                state["progress"]["pending_tasks"].append(pending_task)
+            if pending_task not in pending_tasks:
+                pending_tasks.append(pending_task)
+
+        progress["completed_tasks"] = completed_tasks
+        progress["pending_tasks"] = pending_tasks
+        state["progress"] = progress
 
         self.save(state)
-        self._printer.print(f"[Assessment] Progress updated: {state['progress']['phase']}")
+        self._printer.print(
+            f"[Assessment] Progress updated: {progress.get('phase', 'unknown')}"
+        )
         return True
 
     def add_note(self, note: str) -> bool:
@@ -385,10 +413,13 @@ class AssessmentState:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
         formatted_note = f"[{timestamp}] {note}"
 
-        if state["context"]["notes"]:
-            state["context"]["notes"] += f"\n{formatted_note}"
+        context = state.get("context", ContextData())
+        existing_notes = context.get("notes", "")
+        if existing_notes:
+            context["notes"] = existing_notes + f"\n{formatted_note}"
         else:
-            state["context"]["notes"] = formatted_note
+            context["notes"] = formatted_note
+        state["context"] = context
 
         self.save(state)
         return True
@@ -408,10 +439,14 @@ class AssessmentState:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
         formatted_decision = f"[{timestamp}] {decision}"
 
-        state["context"]["decisions"].append(formatted_decision)
+        context = state.get("context", ContextData())
+        decisions = context.get("decisions", [])
+        decisions.append(formatted_decision)
+        context["decisions"] = decisions
+        state["context"] = context
         self.save(state)
 
-        self._printer.print(f"[Assessment] Decision recorded")
+        self._printer.print("[Assessment] Decision recorded")
         return True
 
     def is_in_scope(self, target: str) -> bool:
@@ -468,7 +503,7 @@ class AssessmentState:
         filepath = os.path.join(evidence_dir, unique_filename)
 
         try:
-            with open(filepath, 'w') as f:
+            with open(filepath, "w") as f:
                 f.write(content)
             self._printer.print(f"[Assessment] Saved evidence: {unique_filename}")
             return filepath

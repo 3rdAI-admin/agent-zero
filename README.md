@@ -151,6 +151,15 @@ docker run -p 50001:80 agent0ai/agent-zero
   - Override the git branch used inside the image with `BRANCH=my-feature`.
 - Remote access:
   - From any device on the same LAN, open `http://<your-host-LAN-IP>:8888` (for example, `http://192.168.1.50:8888`).
+  - **Authentication required for LAN access**: Set `AUTH_LOGIN` and `AUTH_PASSWORD` in `.env`, or add your IP to `ALLOWED_ORIGINS`. Without either, non-localhost origins are blocked by CSRF protection.
+    ```bash
+    # Option 1 (recommended): Enable authentication
+    AUTH_LOGIN=myuser
+    AUTH_PASSWORD=mypassword
+
+    # Option 2: Allow specific origins (comma-separated, NOT semicolons)
+    ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.1.50:*
+    ```
   - Ensure the host firewall allows inbound TCP traffic on the chosen port (8888 by default).
   - For WAN access, tunnel/forward the same port through your router or use the built-in tunnel service.
 - Volumes:
@@ -193,6 +202,16 @@ docker run -p 50001:80 agent0ai/agent-zero
 
 
 ## 🎯 Changelog
+
+### Local: Code Quality, HTTPS, and Bug Fixes
+- **Code quality**: Full Black formatter and linting pass across the Python codebase
+- **HTTPS/TLS for LAN access**: Self-signed cert now supports custom LAN IPs via `AGENT_ZERO_CERT_IPS` env var for remote MCP/A2A clients
+- **Memory consolidation fix**: Timeout during memory consolidation no longer silently drops memories — falls back to direct save
+- **Memory consolidation performance**: Consolidator object reused across loop iterations instead of re-created per fragment
+- **Docker build fix**: Added `setuptools` install before `requirements.txt` so `openai-whisper` builds correctly
+- **macOS startup fix**: Host IP detection in `startup.sh` now works on macOS (fallback to `ipconfig getifaddr en0`)
+- **faiss-cpu version pin relaxed**: `==1.11.0` changed to `>=1.11.0` for broader compatibility
+- **Documentation overhaul**: Fixed 16+ broken links, updated volume mount docs, corrected `claude-pro` → `claude-pro-yolo` references, added HTTPS/TLS docs
 
 ### v0.9.7 - Projects
 [Release video](https://youtu.be/RrTDp_v9V1c)

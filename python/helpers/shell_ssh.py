@@ -9,12 +9,17 @@ from python.helpers.print_style import PrintStyle
 
 
 class SSHInteractiveSession:
-
     # end_comment = "# @@==>> SSHInteractiveSession End-of-Command  <<==@@"
     # ps1_label = "SSHInteractiveSession CLI>"
 
     def __init__(
-        self, logger: Log, hostname: str, port: int, username: str, password: str, cwd: str|None = None
+        self,
+        logger: Log,
+        hostname: str,
+        port: int,
+        username: str,
+        password: str,
+        cwd: str | None = None,
     ):
         self.logger = logger
         self.hostname = hostname
@@ -105,7 +110,7 @@ class SSHInteractiveSession:
         self.last_command = command.encode()
         self.trimmed_command_length = 0
         self.shell.send(self.last_command)
-        
+
     async def read_output(
         self, timeout: float = 0, reset_full_output: bool = False
     ) -> Tuple[str, str]:
@@ -115,13 +120,11 @@ class SSHInteractiveSession:
         if reset_full_output:
             self.full_output = b""
         partial_output = b""
-        leftover = b""
         start_time = time.time()
 
         while self.shell.recv_ready() and (
             timeout <= 0 or time.time() - start_time < timeout
         ):
-
             # data = self.shell.recv(1024)
             data = self.receive_bytes()
 
@@ -213,6 +216,7 @@ class SSHInteractiveSession:
 
         return data
 
+
 def clean_string(input_string):
     # Remove ANSI escape codes
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -222,9 +226,9 @@ def clean_string(input_string):
     cleaned = cleaned.replace("\x00", "")
 
     # remove ipython \r\r\n> sequences from the start
-    cleaned = re.sub(r'^[ \r]*(?:\r*\n>[ \r]*)*', '', cleaned)
+    cleaned = re.sub(r"^[ \r]*(?:\r*\n>[ \r]*)*", "", cleaned)
     # also remove any amount of '> ' sequences from the start
-    cleaned = re.sub(r'^(>\s*)+', '', cleaned)
+    cleaned = re.sub(r"^(>\s*)+", "", cleaned)
 
     # Replace '\r\n' with '\n'
     cleaned = cleaned.replace("\r\n", "\n")

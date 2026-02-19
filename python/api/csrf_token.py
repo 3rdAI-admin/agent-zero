@@ -5,7 +5,6 @@ from python.helpers.api import (
     Input,
     Output,
     Request,
-    Response,
     session,
 )
 from python.helpers import runtime, dotenv, login
@@ -13,7 +12,6 @@ import fnmatch
 
 
 class GetCsrfToken(ApiHandler):
-
     @classmethod
     def get_methods(cls) -> list[str]:
         return ["GET"]
@@ -23,7 +21,6 @@ class GetCsrfToken(ApiHandler):
         return False
 
     async def process(self, input: Input, request: Request) -> Output:
-
         # check for allowed origin to prevent dns rebinding attacks
         origin_check = await self.check_allowed_origin(request)
         if not origin_check["ok"]:

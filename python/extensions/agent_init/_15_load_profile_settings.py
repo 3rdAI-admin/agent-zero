@@ -4,13 +4,13 @@ from python.helpers.extension import Extension
 
 
 class LoadProfileSettings(Extension):
-    
     async def execute(self, **kwargs) -> None:
-
         if not self.agent or not self.agent.config.profile:
             return
 
-        settings_path = files.get_abs_path("agents", self.agent.config.profile, "settings.json")
+        settings_path = files.get_abs_path(
+            "agents", self.agent.config.profile, "settings.json"
+        )
         if files.exists(settings_path):
             try:
                 override_settings_str = files.read_file(settings_path)

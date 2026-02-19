@@ -4,7 +4,6 @@ from python.helpers.extension import Extension
 
 
 class InitialMessage(Extension):
-
     async def execute(self, **kwargs):
         """
         Add an initial greeting message when first user message is processed.
@@ -30,7 +29,9 @@ class InitialMessage(Extension):
 
         # json parse the message, get the tool_args text
         initial_message_json = json.loads(initial_message)
-        initial_message_text = initial_message_json.get("tool_args", {}).get("text", "Hello! How can I help you?")
+        initial_message_text = initial_message_json.get("tool_args", {}).get(
+            "text", "Hello! How can I help you?"
+        )
 
         # Add to log (green bubble) for immediate UI display
         self.agent.context.log.log(

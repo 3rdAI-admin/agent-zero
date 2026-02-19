@@ -6,16 +6,17 @@ Provides structured scanning with assessment state integration.
 
 import subprocess
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from python.helpers.tool_installer import ToolInstaller, run_tool
+from python.helpers.tool_installer import ToolInstaller
 from python.helpers.print_style import PrintStyle
 
 
 @dataclass
 class PortResult:
     """Result for a single port scan."""
+
     port: int
     protocol: str
     state: str
@@ -27,6 +28,7 @@ class PortResult:
 @dataclass
 class HostResult:
     """Result for a single host scan."""
+
     address: str
     hostname: str
     state: str
@@ -56,7 +58,7 @@ class NetworkScanner:
         service_detection: bool = True,
         os_detection: bool = False,
         scripts: Optional[List[str]] = None,
-        timeout: int = 600
+        timeout: int = 600,
     ) -> Tuple[bool, List[HostResult], str]:
         """
         Run an nmap scan against a target.
@@ -89,7 +91,7 @@ class NetworkScanner:
             "udp": "-sU",
             "ack": "-sA",
             "fin": "-sF",
-            "connect": "-sT"
+            "connect": "-sT",
         }
         cmd_parts.append(scan_flags.get(scan_type, "-sT"))
 
@@ -119,10 +121,7 @@ class NetworkScanner:
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             if result.returncode != 0 and not result.stdout:
@@ -149,7 +148,9 @@ class NetworkScanner:
             for host_elem in root.findall(".//host"):
                 # Get host state
                 status = host_elem.find("status")
-                state = status.get("state", "unknown") if status is not None else "unknown"
+                state = (
+                    status.get("state", "unknown") if status is not None else "unknown"
+                )
 
                 # Get addresses
                 address = ""
@@ -178,7 +179,11 @@ class NetworkScanner:
                         protocol = port_elem.get("protocol", "tcp")
 
                         state_elem = port_elem.find("state")
-                        port_state = state_elem.get("state", "unknown") if state_elem is not None else "unknown"
+                        port_state = (
+                            state_elem.get("state", "unknown")
+                            if state_elem is not None
+                            else "unknown"
+                        )
 
                         service_elem = port_elem.find("service")
                         service = ""
@@ -196,14 +201,16 @@ class NetworkScanner:
                                 banner = script.get("output", "")
                                 break
 
-                        ports.append(PortResult(
-                            port=port_num,
-                            protocol=protocol,
-                            state=port_state,
-                            service=service,
-                            version=version,
-                            banner=banner
-                        ))
+                        ports.append(
+                            PortResult(
+                                port=port_num,
+                                protocol=protocol,
+                                state=port_state,
+                                service=service,
+                                version=version,
+                                banner=banner,
+                            )
+                        )
 
                 # Get OS matches
                 os_matches = []
@@ -212,14 +219,16 @@ class NetworkScanner:
                     for osmatch in os_elem.findall("osmatch"):
                         os_matches.append(osmatch.get("name", ""))
 
-                hosts.append(HostResult(
-                    address=address,
-                    hostname=hostname,
-                    state=state,
-                    ports=ports,
-                    os_matches=os_matches[:3],  # Top 3 matches
-                    mac_address=mac_address
-                ))
+                hosts.append(
+                    HostResult(
+                        address=address,
+                        hostname=hostname,
+                        state=state,
+                        ports=ports,
+                        os_matches=os_matches[:3],  # Top 3 matches
+                        mac_address=mac_address,
+                    )
+                )
 
         except ET.ParseError as e:
             cls._printer.print(f"[NetworkScanner] XML parse error: {e}")
@@ -228,11 +237,7 @@ class NetworkScanner:
 
     @classmethod
     def masscan_scan(
-        cls,
-        target: str,
-        ports: str = "1-1000",
-        rate: int = 1000,
-        timeout: int = 300
+        cls, target: str, ports: str = "1-1000", rate: int = 1000, timeout: int = 300
     ) -> Tuple[bool, List[Dict], str]:
         """
         Run a masscan scan for fast port discovery.
@@ -256,15 +261,12 @@ class NetworkScanner:
 
         try:
             result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd, shell=True, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
             import json
+
             results = []
             for line in result.stdout.strip().split("\n"):
                 line = line.strip().rstrip(",")
@@ -283,11 +285,7 @@ class NetworkScanner:
             return False, [], str(e)
 
     @classmethod
-    def ping_sweep(
-        cls,
-        target: str,
-        timeout: int = 120
-    ) -> Tuple[bool, List[str], str]:
+    def ping_sweep(cls, target: str, timeout: int = 120) -> Tuple[bool, List[str], str]:
         """
         Perform a ping sweep to discover live hosts.
 
@@ -308,11 +306,7 @@ class NetworkScanner:
 
         try:
             result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd, shell=True, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse grepable output
@@ -333,9 +327,7 @@ class NetworkScanner:
 
     @classmethod
     def quick_scan(
-        cls,
-        target: str,
-        timeout: int = 300
+        cls, target: str, timeout: int = 300
     ) -> Tuple[bool, List[HostResult], str]:
         """
         Quick scan for common ports.
@@ -354,15 +346,12 @@ class NetworkScanner:
             scan_type="tcp",
             timing=4,
             service_detection=True,
-            timeout=timeout
+            timeout=timeout,
         )
 
     @classmethod
     def vuln_scan(
-        cls,
-        target: str,
-        ports: str = "1-1000",
-        timeout: int = 900
+        cls, target: str, ports: str = "1-1000", timeout: int = 900
     ) -> Tuple[bool, List[HostResult], str]:
         """
         Scan with vulnerability detection scripts.
@@ -382,5 +371,5 @@ class NetworkScanner:
             timing=4,
             service_detection=True,
             scripts=["vuln", "vulners"],
-            timeout=timeout
+            timeout=timeout,
         )

@@ -67,7 +67,7 @@ def delete_project(name: str):
 
 
 def create_project(name: str, data: BasicProjectData):
-    abs_path = files.create_dir_safe(
+    files.create_dir_safe(
         files.get_abs_path(PROJECTS_PARENT_DIR, name), rename_format="{name}_{number}"
     )
     create_project_meta_folders(name)
@@ -287,11 +287,12 @@ def build_system_prompt_vars(name: str):
     project_path = get_project_folder(name)
     # For native installs, return actual path; for Docker, normalize to /a0/
     from python.helpers.runtime import is_dockerized
+
     if is_dockerized():
         normalized_path = files.normalize_a0_path(project_path)
     else:
         normalized_path = project_path
-    
+
     return {
         "project_name": project_data.get("title", ""),
         "project_description": project_data.get("description", ""),
@@ -363,7 +364,9 @@ def create_project_meta_folders(name: str):
 
     # create assessment folders for security assessments
     files.create_dir(get_project_meta_folder(name, PROJECT_ASSESSMENT_DIR))
-    files.create_dir(get_project_meta_folder(name, PROJECT_ASSESSMENT_DIR, PROJECT_EVIDENCE_DIR))
+    files.create_dir(
+        get_project_meta_folder(name, PROJECT_ASSESSMENT_DIR, PROJECT_EVIDENCE_DIR)
+    )
 
 
 def get_knowledge_files_count(name: str):
@@ -372,25 +375,26 @@ def get_knowledge_files_count(name: str):
     )
     return len(files.list_files_in_dir_recursively(knowledge_folder))
 
-def get_file_structure(name: str, basic_data: BasicProjectData|None=None) -> str:
+
+def get_file_structure(name: str, basic_data: BasicProjectData | None = None) -> str:
     project_folder = get_project_folder(name)
     if basic_data is None:
         basic_data = load_basic_project_data(name)
-    
-    tree = str(file_tree.file_tree(
-        project_folder,
-        max_depth=basic_data["file_structure"]["max_depth"],
-        max_files=basic_data["file_structure"]["max_files"],
-        max_folders=basic_data["file_structure"]["max_folders"],
-        max_lines=basic_data["file_structure"]["max_lines"],
-        ignore=basic_data["file_structure"]["gitignore"],
-        output_mode=file_tree.OUTPUT_MODE_STRING
-    ))
+
+    tree = str(
+        file_tree.file_tree(
+            project_folder,
+            max_depth=basic_data["file_structure"]["max_depth"],
+            max_files=basic_data["file_structure"]["max_files"],
+            max_folders=basic_data["file_structure"]["max_folders"],
+            max_lines=basic_data["file_structure"]["max_lines"],
+            ignore=basic_data["file_structure"]["gitignore"],
+            output_mode=file_tree.OUTPUT_MODE_STRING,
+        )
+    )
 
     # empty?
     if "\n" not in tree:
         tree += "\n # Empty"
 
     return tree
-
-    

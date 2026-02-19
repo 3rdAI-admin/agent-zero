@@ -6,7 +6,6 @@ Supports: nikto, nuclei, whatweb, httpx
 
 import subprocess
 import json
-import re
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 
@@ -17,6 +16,7 @@ from python.helpers.print_style import PrintStyle
 @dataclass
 class WebFinding:
     """A web vulnerability or information finding."""
+
     target: str
     finding_type: str
     severity: str
@@ -29,6 +29,7 @@ class WebFinding:
 @dataclass
 class TechFingerprint:
     """Technology fingerprint result."""
+
     target: str
     technology: str
     version: str
@@ -56,7 +57,7 @@ class WebScanner:
         port: int = 80,
         ssl: bool = False,
         tuning: Optional[str] = None,
-        timeout: int = 600
+        timeout: int = 600,
     ) -> Tuple[bool, List[WebFinding], str]:
         """
         Run a nikto scan against a web server.
@@ -88,10 +89,7 @@ class WebScanner:
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse findings from output
@@ -114,15 +112,17 @@ class WebScanner:
             data = json.loads(output)
             if isinstance(data, dict) and "vulnerabilities" in data:
                 for vuln in data["vulnerabilities"]:
-                    findings.append(WebFinding(
-                        target=target,
-                        finding_type="vulnerability",
-                        severity=vuln.get("severity", "info"),
-                        title=vuln.get("id", "Unknown"),
-                        description=vuln.get("msg", ""),
-                        evidence=vuln.get("url", ""),
-                        reference=vuln.get("references", "")
-                    ))
+                    findings.append(
+                        WebFinding(
+                            target=target,
+                            finding_type="vulnerability",
+                            severity=vuln.get("severity", "info"),
+                            title=vuln.get("id", "Unknown"),
+                            description=vuln.get("msg", ""),
+                            evidence=vuln.get("url", ""),
+                            reference=vuln.get("references", ""),
+                        )
+                    )
                 return findings
         except json.JSONDecodeError:
             pass
@@ -138,24 +138,34 @@ class WebScanner:
 
                     # Determine severity from keywords
                     severity = "info"
-                    if any(kw in description.lower() for kw in ["critical", "rce", "injection", "execute"]):
+                    if any(
+                        kw in description.lower()
+                        for kw in ["critical", "rce", "injection", "execute"]
+                    ):
                         severity = "critical"
-                    elif any(kw in description.lower() for kw in ["high", "vulnerability", "exploit"]):
+                    elif any(
+                        kw in description.lower()
+                        for kw in ["high", "vulnerability", "exploit"]
+                    ):
                         severity = "high"
                     elif any(kw in description.lower() for kw in ["medium", "warning"]):
                         severity = "medium"
-                    elif any(kw in description.lower() for kw in ["low", "information"]):
+                    elif any(
+                        kw in description.lower() for kw in ["low", "information"]
+                    ):
                         severity = "low"
 
-                    findings.append(WebFinding(
-                        target=target,
-                        finding_type="vulnerability",
-                        severity=severity,
-                        title=title,
-                        description=description,
-                        evidence="",
-                        reference=""
-                    ))
+                    findings.append(
+                        WebFinding(
+                            target=target,
+                            finding_type="vulnerability",
+                            severity=severity,
+                            title=title,
+                            description=description,
+                            evidence="",
+                            reference="",
+                        )
+                    )
 
         return findings
 
@@ -166,7 +176,7 @@ class WebScanner:
         templates: Optional[List[str]] = None,
         severity: Optional[List[str]] = None,
         tags: Optional[List[str]] = None,
-        timeout: int = 600
+        timeout: int = 600,
     ) -> Tuple[bool, List[WebFinding], str]:
         """
         Run a nuclei scan with vulnerability templates.
@@ -201,10 +211,7 @@ class WebScanner:
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSONL output
@@ -214,15 +221,19 @@ class WebScanner:
                     continue
                 try:
                     data = json.loads(line)
-                    findings.append(WebFinding(
-                        target=data.get("host", target),
-                        finding_type=data.get("type", "vulnerability"),
-                        severity=data.get("info", {}).get("severity", "info"),
-                        title=data.get("info", {}).get("name", "Unknown"),
-                        description=data.get("info", {}).get("description", ""),
-                        evidence=data.get("matched-at", ""),
-                        reference=", ".join(data.get("info", {}).get("reference", []))
-                    ))
+                    findings.append(
+                        WebFinding(
+                            target=data.get("host", target),
+                            finding_type=data.get("type", "vulnerability"),
+                            severity=data.get("info", {}).get("severity", "info"),
+                            title=data.get("info", {}).get("name", "Unknown"),
+                            description=data.get("info", {}).get("description", ""),
+                            evidence=data.get("matched-at", ""),
+                            reference=", ".join(
+                                data.get("info", {}).get("reference", [])
+                            ),
+                        )
+                    )
                 except json.JSONDecodeError:
                     pass
 
@@ -235,10 +246,7 @@ class WebScanner:
 
     @classmethod
     def whatweb_scan(
-        cls,
-        target: str,
-        aggression: int = 1,
-        timeout: int = 120
+        cls, target: str, aggression: int = 1, timeout: int = 120
     ) -> Tuple[bool, List[TechFingerprint], str]:
         """
         Fingerprint web technologies using whatweb.
@@ -261,11 +269,7 @@ class WebScanner:
 
         try:
             result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd, shell=True, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
@@ -281,15 +285,21 @@ class WebScanner:
                     for tech_name, tech_data in plugins.items():
                         version = ""
                         if isinstance(tech_data, dict):
-                            version = tech_data.get("version", [""])[0] if tech_data.get("version") else ""
+                            version = (
+                                tech_data.get("version", [""])[0]
+                                if tech_data.get("version")
+                                else ""
+                            )
 
-                        fingerprints.append(TechFingerprint(
-                            target=target_url,
-                            technology=tech_name,
-                            version=str(version),
-                            category="",
-                            confidence=100
-                        ))
+                        fingerprints.append(
+                            TechFingerprint(
+                                target=target_url,
+                                technology=tech_name,
+                                version=str(version),
+                                category="",
+                                confidence=100,
+                            )
+                        )
                 except json.JSONDecodeError:
                     pass
 
@@ -302,10 +312,7 @@ class WebScanner:
 
     @classmethod
     def httpx_probe(
-        cls,
-        targets: List[str],
-        ports: Optional[List[int]] = None,
-        timeout: int = 120
+        cls, targets: List[str], ports: Optional[List[int]] = None, timeout: int = 120
     ) -> Tuple[bool, List[Dict], str]:
         """
         Probe HTTP services using httpx.
@@ -324,24 +331,31 @@ class WebScanner:
 
         # Write targets to temp file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("\n".join(targets))
             targets_file = f.name
 
-        cmd_parts = ["httpx", "-l", targets_file, "-json", "-silent",
-                     "-status-code", "-title", "-tech-detect", "-web-server"]
+        cmd_parts = [
+            "httpx",
+            "-l",
+            targets_file,
+            "-json",
+            "-silent",
+            "-status-code",
+            "-title",
+            "-tech-detect",
+            "-web-server",
+        ]
 
         if ports:
             cmd_parts.extend(["-ports", ",".join(str(p) for p in ports)])
 
-        cls._printer.print(f"[WebScanner] Running httpx probe")
+        cls._printer.print("[WebScanner] Running httpx probe")
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
@@ -363,16 +377,15 @@ class WebScanner:
             return False, [], str(e)
         finally:
             import os
+
             try:
                 os.unlink(targets_file)
-            except:
+            except OSError:
                 pass
 
     @classmethod
     def quick_web_scan(
-        cls,
-        target: str,
-        timeout: int = 300
+        cls, target: str, timeout: int = 300
     ) -> Tuple[bool, Dict[str, Any], str]:
         """
         Quick web scan combining fingerprinting and vulnerability checks.
@@ -384,38 +397,26 @@ class WebScanner:
         Returns:
             Tuple of (success, combined results, summary)
         """
-        results = {
-            "target": target,
-            "technologies": [],
-            "findings": [],
-            "errors": []
-        }
+        results = {"target": target, "technologies": [], "findings": [], "errors": []}
 
         # Run whatweb for tech fingerprinting
-        cls._printer.print(f"[WebScanner] Phase 1: Technology fingerprinting")
+        cls._printer.print("[WebScanner] Phase 1: Technology fingerprinting")
         success, fingerprints, _ = cls.whatweb_scan(target, timeout=timeout // 3)
         if success:
             results["technologies"] = [
-                {"name": fp.technology, "version": fp.version}
-                for fp in fingerprints
+                {"name": fp.technology, "version": fp.version} for fp in fingerprints
             ]
         else:
             results["errors"].append("Tech fingerprinting failed")
 
         # Run nuclei with common templates
-        cls._printer.print(f"[WebScanner] Phase 2: Vulnerability scanning")
+        cls._printer.print("[WebScanner] Phase 2: Vulnerability scanning")
         success, findings, _ = cls.nuclei_scan(
-            target,
-            severity=["critical", "high", "medium"],
-            timeout=timeout * 2 // 3
+            target, severity=["critical", "high", "medium"], timeout=timeout * 2 // 3
         )
         if success:
             results["findings"] = [
-                {
-                    "severity": f.severity,
-                    "title": f.title,
-                    "description": f.description
-                }
+                {"severity": f.severity, "title": f.title, "description": f.description}
                 for f in findings
             ]
         else:

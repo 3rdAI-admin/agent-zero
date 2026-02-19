@@ -7,7 +7,7 @@ Supports: semgrep, bandit (Python), eslint-security (JavaScript)
 import subprocess
 import json
 import os
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from python.helpers.tool_installer import ToolInstaller
@@ -17,6 +17,7 @@ from python.helpers.print_style import PrintStyle
 @dataclass
 class CodeFinding:
     """A code security finding."""
+
     file: str
     line: int
     column: int
@@ -53,7 +54,7 @@ class CodeScanner:
         # ESLint
         "2": "high",
         "1": "medium",
-        "0": "info"
+        "0": "info",
     }
 
     @classmethod
@@ -63,7 +64,7 @@ class CodeScanner:
         config: str = "auto",
         severity: Optional[List[str]] = None,
         exclude: Optional[List[str]] = None,
-        timeout: int = 300
+        timeout: int = 300,
     ) -> Tuple[bool, List[CodeFinding], str]:
         """
         Run semgrep static analysis.
@@ -97,10 +98,7 @@ class CodeScanner:
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
@@ -109,8 +107,7 @@ class CodeScanner:
                 data = json.loads(result.stdout)
                 for result_item in data.get("results", []):
                     severity = cls.SEVERITY_MAP.get(
-                        result_item.get("extra", {}).get("severity", "INFO"),
-                        "info"
+                        result_item.get("extra", {}).get("severity", "INFO"), "info"
                     )
 
                     # Extract CWE if available
@@ -123,17 +120,21 @@ class CodeScanner:
                         else:
                             cwe = str(cwe_list)
 
-                    findings.append(CodeFinding(
-                        file=result_item.get("path", ""),
-                        line=result_item.get("start", {}).get("line", 0),
-                        column=result_item.get("start", {}).get("col", 0),
-                        severity=severity,
-                        rule_id=result_item.get("check_id", ""),
-                        message=result_item.get("extra", {}).get("message", ""),
-                        code_snippet=result_item.get("extra", {}).get("lines", ""),
-                        cwe=cwe,
-                        fix_recommendation=result_item.get("extra", {}).get("fix", "")
-                    ))
+                    findings.append(
+                        CodeFinding(
+                            file=result_item.get("path", ""),
+                            line=result_item.get("start", {}).get("line", 0),
+                            column=result_item.get("start", {}).get("col", 0),
+                            severity=severity,
+                            rule_id=result_item.get("check_id", ""),
+                            message=result_item.get("extra", {}).get("message", ""),
+                            code_snippet=result_item.get("extra", {}).get("lines", ""),
+                            cwe=cwe,
+                            fix_recommendation=result_item.get("extra", {}).get(
+                                "fix", ""
+                            ),
+                        )
+                    )
             except json.JSONDecodeError:
                 pass
 
@@ -151,7 +152,7 @@ class CodeScanner:
         severity: str = "low",
         confidence: str = "low",
         exclude: Optional[List[str]] = None,
-        timeout: int = 300
+        timeout: int = 300,
     ) -> Tuple[bool, List[CodeFinding], str]:
         """
         Run bandit Python security analysis.
@@ -171,10 +172,15 @@ class CodeScanner:
             return False, [], f"Failed to install bandit: {msg}"
 
         # Build command
-        cmd_parts = ["bandit", "-r", "-f", "json",
-                     "-ll" if severity == "low" else "-l" if severity == "medium" else "",
-                     "-ii" if confidence == "low" else "-i" if confidence == "medium" else "",
-                     path]
+        cmd_parts = [
+            "bandit",
+            "-r",
+            "-f",
+            "json",
+            "-ll" if severity == "low" else "-l" if severity == "medium" else "",
+            "-ii" if confidence == "low" else "-i" if confidence == "medium" else "",
+            path,
+        ]
 
         # Remove empty strings
         cmd_parts = [c for c in cmd_parts if c]
@@ -186,10 +192,7 @@ class CodeScanner:
 
         try:
             result = subprocess.run(
-                cmd_parts,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd_parts, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
@@ -198,8 +201,7 @@ class CodeScanner:
                 data = json.loads(result.stdout)
                 for result_item in data.get("results", []):
                     severity = cls.SEVERITY_MAP.get(
-                        result_item.get("issue_severity", "LOW"),
-                        "low"
+                        result_item.get("issue_severity", "LOW"), "low"
                     )
 
                     # Build CWE from test ID
@@ -207,25 +209,25 @@ class CodeScanner:
                     test_id = result_item.get("test_id", "")
                     cwe_mapping = {
                         "B101": "CWE-703",  # assert
-                        "B102": "CWE-78",   # exec
+                        "B102": "CWE-78",  # exec
                         "B103": "CWE-732",  # chmod
-                        "B104": "CWE-78",   # hardcoded bind
+                        "B104": "CWE-78",  # hardcoded bind
                         "B105": "CWE-259",  # hardcoded password
                         "B106": "CWE-259",  # hardcoded password
                         "B107": "CWE-259",  # hardcoded password
                         "B108": "CWE-377",  # hardcoded tmp
                         "B110": "CWE-703",  # try except pass
                         "B112": "CWE-703",  # try except continue
-                        "B201": "CWE-94",   # flask debug
+                        "B201": "CWE-94",  # flask debug
                         "B301": "CWE-502",  # pickle
                         "B302": "CWE-502",  # marshal
                         "B303": "CWE-327",  # md5
                         "B304": "CWE-327",  # des
                         "B305": "CWE-327",  # cipher
                         "B306": "CWE-377",  # mktemp
-                        "B307": "CWE-78",   # eval
+                        "B307": "CWE-78",  # eval
                         "B308": "CWE-611",  # mark safe
-                        "B310": "CWE-22",   # urllib urlopen
+                        "B310": "CWE-22",  # urllib urlopen
                         "B311": "CWE-330",  # random
                         "B312": "CWE-295",  # telnetlib
                         "B313": "CWE-611",  # xml parse
@@ -237,7 +239,7 @@ class CodeScanner:
                         "B319": "CWE-611",  # xml parse
                         "B320": "CWE-611",  # xml parse
                         "B321": "CWE-327",  # ftplib
-                        "B322": "CWE-78",   # input
+                        "B322": "CWE-78",  # input
                         "B323": "CWE-295",  # ssl
                         "B324": "CWE-327",  # hashlib
                         "B501": "CWE-295",  # ssl verify
@@ -247,34 +249,36 @@ class CodeScanner:
                         "B505": "CWE-327",  # weak crypto
                         "B506": "CWE-295",  # yaml load
                         "B507": "CWE-295",  # ssh host key
-                        "B601": "CWE-78",   # paramiko call
-                        "B602": "CWE-78",   # subprocess popen
-                        "B603": "CWE-78",   # subprocess without shell
-                        "B604": "CWE-78",   # shell true
-                        "B605": "CWE-78",   # os system
-                        "B606": "CWE-78",   # os popen
-                        "B607": "CWE-78",   # start process partial path
-                        "B608": "CWE-89",   # sql injection
-                        "B609": "CWE-78",   # wildcard injection
-                        "B610": "CWE-94",   # django extra
-                        "B611": "CWE-94",   # django raw sql
-                        "B701": "CWE-79",   # jinja2 autoescape
-                        "B702": "CWE-79",   # mako templates
-                        "B703": "CWE-79",   # django mark safe
+                        "B601": "CWE-78",  # paramiko call
+                        "B602": "CWE-78",  # subprocess popen
+                        "B603": "CWE-78",  # subprocess without shell
+                        "B604": "CWE-78",  # shell true
+                        "B605": "CWE-78",  # os system
+                        "B606": "CWE-78",  # os popen
+                        "B607": "CWE-78",  # start process partial path
+                        "B608": "CWE-89",  # sql injection
+                        "B609": "CWE-78",  # wildcard injection
+                        "B610": "CWE-94",  # django extra
+                        "B611": "CWE-94",  # django raw sql
+                        "B701": "CWE-79",  # jinja2 autoescape
+                        "B702": "CWE-79",  # mako templates
+                        "B703": "CWE-79",  # django mark safe
                     }
                     cwe = cwe_mapping.get(test_id, "")
 
-                    findings.append(CodeFinding(
-                        file=result_item.get("filename", ""),
-                        line=result_item.get("line_number", 0),
-                        column=result_item.get("col_offset", 0),
-                        severity=severity,
-                        rule_id=test_id,
-                        message=result_item.get("issue_text", ""),
-                        code_snippet=result_item.get("code", ""),
-                        cwe=cwe,
-                        fix_recommendation=""
-                    ))
+                    findings.append(
+                        CodeFinding(
+                            file=result_item.get("filename", ""),
+                            line=result_item.get("line_number", 0),
+                            column=result_item.get("col_offset", 0),
+                            severity=severity,
+                            rule_id=test_id,
+                            message=result_item.get("issue_text", ""),
+                            code_snippet=result_item.get("code", ""),
+                            cwe=cwe,
+                            fix_recommendation="",
+                        )
+                    )
             except json.JSONDecodeError:
                 pass
 
@@ -287,9 +291,7 @@ class CodeScanner:
 
     @classmethod
     def eslint_scan(
-        cls,
-        path: str,
-        timeout: int = 300
+        cls, path: str, timeout: int = 300
     ) -> Tuple[bool, List[CodeFinding], str]:
         """
         Run ESLint with security plugin on JavaScript/TypeScript.
@@ -312,11 +314,7 @@ class CodeScanner:
 
         try:
             result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                timeout=timeout,
-                text=True
+                cmd, shell=True, capture_output=True, timeout=timeout, text=True
             )
 
             # Parse JSON output
@@ -327,21 +325,26 @@ class CodeScanner:
                     file_path = file_result.get("filePath", "")
                     for message in file_result.get("messages", []):
                         severity = cls.SEVERITY_MAP.get(
-                            str(message.get("severity", 0)),
-                            "info"
+                            str(message.get("severity", 0)), "info"
                         )
 
-                        findings.append(CodeFinding(
-                            file=file_path,
-                            line=message.get("line", 0),
-                            column=message.get("column", 0),
-                            severity=severity,
-                            rule_id=message.get("ruleId", ""),
-                            message=message.get("message", ""),
-                            code_snippet="",
-                            cwe="",
-                            fix_recommendation=message.get("fix", {}).get("text", "") if message.get("fix") else ""
-                        ))
+                        findings.append(
+                            CodeFinding(
+                                file=file_path,
+                                line=message.get("line", 0),
+                                column=message.get("column", 0),
+                                severity=severity,
+                                rule_id=message.get("ruleId", ""),
+                                message=message.get("message", ""),
+                                code_snippet="",
+                                cwe="",
+                                fix_recommendation=message.get("fix", {}).get(
+                                    "text", ""
+                                )
+                                if message.get("fix")
+                                else "",
+                            )
+                        )
             except json.JSONDecodeError:
                 pass
 
@@ -392,7 +395,20 @@ class CodeScanner:
         else:
             for root, dirs, files in os.walk(path):
                 # Skip hidden and common non-source dirs
-                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', 'venv', '__pycache__', 'vendor', 'dist', 'build']]
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not d.startswith(".")
+                    and d
+                    not in [
+                        "node_modules",
+                        "venv",
+                        "__pycache__",
+                        "vendor",
+                        "dist",
+                        "build",
+                    ]
+                ]
 
                 for file in files:
                     ext = os.path.splitext(file)[1].lower()
@@ -403,9 +419,7 @@ class CodeScanner:
 
     @classmethod
     def auto_scan(
-        cls,
-        path: str,
-        timeout: int = 600
+        cls, path: str, timeout: int = 600
     ) -> Tuple[bool, Dict[str, List[CodeFinding]], str]:
         """
         Automatically detect languages and run appropriate scanners.
@@ -434,11 +448,9 @@ class CodeScanner:
         per_scanner_timeout = timeout // max(num_scanners, 1)
 
         # Always run semgrep (multi-language)
-        cls._printer.print(f"[CodeScanner] Running semgrep (multi-language)")
+        cls._printer.print("[CodeScanner] Running semgrep (multi-language)")
         success, findings, _ = cls.semgrep_scan(
-            path,
-            config="auto",
-            timeout=per_scanner_timeout
+            path, config="auto", timeout=per_scanner_timeout
         )
         if success:
             results["semgrep"] = findings
@@ -447,7 +459,7 @@ class CodeScanner:
 
         # Run language-specific scanners
         if "python" in languages:
-            cls._printer.print(f"[CodeScanner] Running bandit (Python)")
+            cls._printer.print("[CodeScanner] Running bandit (Python)")
             success, findings, _ = cls.bandit_scan(path, timeout=per_scanner_timeout)
             if success:
                 results["bandit"] = findings
@@ -455,7 +467,7 @@ class CodeScanner:
                 errors.append("bandit failed")
 
         if any(lang in languages for lang in ["javascript", "typescript"]):
-            cls._printer.print(f"[CodeScanner] Running eslint (JavaScript/TypeScript)")
+            cls._printer.print("[CodeScanner] Running eslint (JavaScript/TypeScript)")
             success, findings, _ = cls.eslint_scan(path, timeout=per_scanner_timeout)
             if success:
                 results["eslint"] = findings

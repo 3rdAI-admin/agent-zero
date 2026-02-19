@@ -9,7 +9,7 @@ class ReplaceIncludeAlias(Extension):
         loop_data=None,
         text: str = "",
         parsed: dict[str, Any] | None = None,
-        **kwargs
+        **kwargs,
     ):
         if not parsed or not isinstance(parsed, dict):
             return

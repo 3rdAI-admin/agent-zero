@@ -34,8 +34,12 @@ fi
 # # Install some packages in specific variants
 # pip install torch --index-url https://download.pytorch.org/whl/cpu
 
+# Ensure setuptools is available (openai-whisper needs pkg_resources at build time)
+uv pip install setuptools
+
 # Install remaining A0 python packages
-uv pip install -r /git/agent-zero/requirements.txt
+# --no-build-isolation lets openai-whisper find pkg_resources from the venv
+uv pip install --no-build-isolation -r /git/agent-zero/requirements.txt
 # override for packages that have unnecessarily strict dependencies
 uv pip install -r /git/agent-zero/requirements2.txt
 

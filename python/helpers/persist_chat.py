@@ -26,8 +26,10 @@ def get_chat_folder_path(ctxid: str):
     """
     return files.get_abs_path(CHATS_FOLDER, ctxid)
 
+
 def get_chat_msg_files_folder(ctxid: str):
     return files.get_abs_path(get_chat_folder_path(ctxid), "messages")
+
 
 def save_tmp_chat(context: AgentContext):
     """Save context to the chats folder"""
@@ -123,9 +125,10 @@ def _serialize_context(context: AgentContext):
         agents.append(_serialize_agent(agent))
         agent = agent.data.get(Agent.DATA_NAME_SUBORDINATE, None)
 
-
     data = {k: v for k, v in context.data.items() if not k.startswith("_")}
-    output_data = {k: v for k, v in context.output_data.items() if not k.startswith("_")}
+    output_data = {
+        k: v for k, v in context.output_data.items() if not k.startswith("_")
+    }
 
     return {
         "id": context.id,

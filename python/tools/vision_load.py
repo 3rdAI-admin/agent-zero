@@ -13,9 +13,7 @@ TOKENS_ESTIMATE = 1500
 
 class VisionLoad(Tool):
     async def execute(self, paths: list[str] = [], **kwargs) -> Response:
-
         self.images_dict = {}
-        template: list[dict[str, str]] = []  # type: ignore
 
         for path in paths:
             if not await runtime.call_development_function(files.exists, str(path)):
@@ -47,12 +45,13 @@ class VisionLoad(Tool):
                     except Exception as e:
                         self.images_dict[path] = None
                         PrintStyle().error(f"Error processing image {path}: {e}")
-                        self.agent.context.log.log("warning", f"Error processing image {path}: {e}")
+                        self.agent.context.log.log(
+                            "warning", f"Error processing image {path}: {e}"
+                        )
 
         return Response(message="dummy", break_loop=False)
 
     async def after_execution(self, response: Response, **kwargs):
-
         # build image data messages for LLMs, or error message
         content = []
         if self.images_dict:
@@ -72,7 +71,9 @@ class VisionLoad(Tool):
                         }
                     )
             # append as raw message content for LLMs with vision tokens estimate
-            msg = history.RawMessage(raw_content=content, preview="<Base64 encoded image data>")
+            msg = history.RawMessage(
+                raw_content=content, preview="<Base64 encoded image data>"
+            )
             self.agent.hist_add_message(
                 False, content=msg, tokens=TOKENS_ESTIMATE * len(content)
             )

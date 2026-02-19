@@ -1,16 +1,13 @@
-from python.helpers import persist_chat, tokens
 from python.helpers.extension import Extension
 from agent import LoopData
-import asyncio
-from python.helpers.log import LogItem
-from python.helpers import log
 import math
-from python.extensions.before_main_llm_call._10_log_for_stream import build_heading, build_default_heading
+from python.extensions.before_main_llm_call._10_log_for_stream import (
+    build_heading,
+)
+
 
 class LogFromStream(Extension):
-
     async def execute(self, loop_data: LoopData = LoopData(), text: str = "", **kwargs):
-
         # thought length indicator
         pipes = "|" * math.ceil(math.sqrt(len(text)))
         heading = build_heading(self.agent, f"Reasoning.. {pipes}")

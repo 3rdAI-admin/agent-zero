@@ -7,7 +7,6 @@ from mimetypes import guess_type
 
 
 class ImageGet(ApiHandler):
-
     @classmethod
     def get_methods(cls) -> list[str]:
         return ["GET"]
@@ -15,10 +14,7 @@ class ImageGet(ApiHandler):
     async def process(self, input: dict, request: Request) -> dict | Response:
         # input data
         path = input.get("path", request.args.get("path", ""))
-        metadata = (
-            input.get("metadata", request.args.get("metadata", "false")).lower()
-            == "true"
-        )
+        (input.get("metadata", request.args.get("metadata", "false")).lower() == "true")
 
         if not path:
             raise ValueError("No path provided")
@@ -41,9 +37,8 @@ class ImageGet(ApiHandler):
         # # If metadata is requested, return file information
         # if metadata:
         #     return _get_file_metadata(path, filename, file_ext, image_extensions)
-       
-        if file_ext in image_extensions:
 
+        if file_ext in image_extensions:
             # in development environment, try to serve the image from local file system if exists, otherwise from docker
             if runtime.is_development():
                 if files.exists(path):
