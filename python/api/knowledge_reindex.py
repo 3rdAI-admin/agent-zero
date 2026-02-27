@@ -1,5 +1,6 @@
 from python.helpers.api import ApiHandler, Request, Response
-from python.helpers import memory
+from python.helpers import files, memory, notification, projects, notification
+import os
 
 
 class ReindexKnowledge(ApiHandler):

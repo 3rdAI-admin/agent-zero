@@ -29,20 +29,12 @@ class ApiLogGet(ApiHandler):
             length = input.get("length", 100)
 
         if not context_id:
-            return Response(
-                '{"error": "context_id is required"}',
-                status=400,
-                mimetype="application/json",
-            )
+            return Response('{"error": "context_id is required"}', status=400, mimetype="application/json")
 
         # Get context
         context = AgentContext.use(context_id)
         if not context:
-            return Response(
-                '{"error": "Context not found"}',
-                status=404,
-                mimetype="application/json",
-            )
+            return Response('{"error": "Context not found"}', status=404, mimetype="application/json")
 
         try:
             # Get total number of log items
@@ -63,12 +55,10 @@ class ApiLogGet(ApiHandler):
                     "returned_items": len(log_items),
                     "start_position": start_pos,
                     "progress": context.log.progress,
-                    "progress_active": context.log.progress_active,
-                    "items": log_items,
-                },
+                    "progress_active": bool(context.log.progress_active),
+                    "items": log_items
+                }
             }
 
         except Exception as e:
-            return Response(
-                f'{{"error": "{str(e)}"}}', status=500, mimetype="application/json"
-            )
+            return Response(f'{{"error": "{str(e)}"}}', status=500, mimetype="application/json")

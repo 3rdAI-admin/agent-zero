@@ -17,7 +17,7 @@ class Delegation(Tool):
             config = initialize_agent()
 
             # set subordinate prompt profile if provided, if not, keep original
-            agent_profile = kwargs.get("profile")
+            agent_profile = kwargs.get("profile", kwargs.get("agent_profile", ""))
             if agent_profile:
                 config.profile = agent_profile
 
@@ -34,6 +34,9 @@ class Delegation(Tool):
         # run subordinate monologue
         result = await subordinate.monologue()
 
+        # seal the subordinate's current topic so messages move to `topics` for compression
+        subordinate.history.new_topic()
+
         # hint to use includes for long responses
         additional = None
         if len(result) >= save_tool_call_file.LEN_MIN:
@@ -46,7 +49,7 @@ class Delegation(Tool):
 
     def get_log_object(self):
         return self.agent.context.log.log(
-            type="tool",
+            type="subagent",
             heading=f"icon://communication {self.agent.agent_name}: Calling Subordinate Agent",
             content="",
             kvps=self.args,

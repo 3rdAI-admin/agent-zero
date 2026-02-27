@@ -8,12 +8,14 @@ from initialize import initialize_agent
 from python.helpers.print_style import PrintStyle
 from python.helpers.errors import format_error
 
+ThreadLockType = Union[threading.Lock, threading.RLock]
+
 Input = dict
 Output = Union[Dict[str, Any], Response, TypedDict]  # type: ignore
 
 
 class ApiHandler:
-    def __init__(self, app: Flask, thread_lock: threading.Lock):
+    def __init__(self, app: Flask, thread_lock: ThreadLockType):
         self.app = app
         self.thread_lock = thread_lock
 

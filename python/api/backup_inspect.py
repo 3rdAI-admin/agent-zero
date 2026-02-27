@@ -41,7 +41,7 @@ class BackupInspect(ApiHandler):
                     "total_files", len(metadata.get("files", []))
                 ),
                 "backup_size": metadata.get("backup_size", 0),
-                "include_hidden": metadata.get("include_hidden", False),
+                "include_hidden": metadata.get("include_hidden", True),
                 "files_in_archive": metadata.get("files_in_archive", []),
                 "checksums": {},  # Will be added if needed
             }

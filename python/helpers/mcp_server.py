@@ -1,25 +1,31 @@
 import os
+import asyncio
 from typing import Annotated, Literal, Union
 from urllib.parse import urlparse
 from openai import BaseModel
 from pydantic import Field
+import fastmcp
 from fastmcp import FastMCP
+import contextvars
 
 from agent import AgentContext, AgentContextType, UserMessage
 from python.helpers.persist_chat import remove_chat
 from initialize import initialize_agent
 from python.helpers.print_style import PrintStyle
-from python.helpers import settings
+from python.helpers import settings, projects
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
-from fastmcp.server.http import create_sse_app
+from fastmcp.server.http import create_sse_app, create_base_app, build_resource_metadata_url # type: ignore
+from starlette.routing import Mount  # type: ignore
 from starlette.requests import Request
 import threading
 
 _PRINTER = PrintStyle(italic=True, font_color="green", padding=False)
 
+# Context variable to store project name from URL (per-request)
+_mcp_project_name: contextvars.ContextVar[str | None] = contextvars.ContextVar('mcp_project_name', default=None)
 
 mcp_server: FastMCP = FastMCP(
     name="Agent Zero integrated MCP Server",
@@ -127,6 +133,9 @@ async def send_message(
         description="The response from the remote Agent Zero Instance", title="response"
     ),
 ]:
+    # Get project name from context variable (set in proxy __call__)
+    project_name = _mcp_project_name.get()
+
     context: AgentContext | None = None
     if chat_id:
         context = AgentContext.get(chat_id)
@@ -137,9 +146,25 @@ async def send_message(
             # whether we should save the chat or delete it afterwards
             # If we continue a conversation, it must be persistent
             persistent_chat = True
+
+            # Validation: if project is in URL but context has different project
+            if project_name:
+                existing_project = context.get_data(projects.CONTEXT_DATA_KEY_PROJECT)
+                if existing_project and existing_project != project_name:
+                    return ToolError(
+                        error=f"Chat belongs to project '{existing_project}' but URL specifies '{project_name}'",
+                        chat_id=chat_id
+                    )
     else:
         config = initialize_agent()
         context = AgentContext(config=config, type=AgentContextType.BACKGROUND)
+
+        # Activate project if specified in URL
+        if project_name:
+            try:
+                projects.activate_project(context.id, project_name)
+            except Exception as e:
+                return ToolError(error=f"Failed to activate project: {str(e)}", chat_id="")
 
     if not message:
         return ToolError(
@@ -198,7 +223,7 @@ async def finish_chat(
             description="ID of the chat to be finished. This value is returned in response to sending previous message.",
             title="chat_id",
         ),
-    ],
+    ]
 ) -> Annotated[
     Union[ToolResponse, ToolError],
     Field(
@@ -216,373 +241,6 @@ async def finish_chat(
         AgentContext.remove(context.id)
         remove_chat(context.id)
         return ToolResponse(response="Chat finished", chat_id=chat_id)
-
-
-# =============================================================================
-# SECURITY ASSESSMENT TOOLS - For Claude Code integration
-# =============================================================================
-
-NETWORK_SCAN_DESCRIPTION = """
-Run a network scan using nmap against a target host or network.
-Use for port discovery, service detection, and OS fingerprinting.
-Target must be in-scope for the active assessment.
-"""
-
-
-@mcp_server.tool(
-    name="network_scan",
-    description=NETWORK_SCAN_DESCRIPTION,
-    tags={"security", "network", "scan", "nmap", "ports", "recon"},
-)
-async def network_scan(
-    target: Annotated[str, Field(description="Target IP, hostname, or CIDR range")],
-    ports: Annotated[
-        str, Field(description="Port specification (e.g., '22,80,443' or '1-1000')")
-    ] = "1-1000",
-    scan_type: Annotated[str, Field(description="Scan type: tcp, syn, udp")] = "tcp",
-    service_detection: Annotated[
-        bool, Field(description="Enable service version detection")
-    ] = True,
-    project_name: Annotated[
-        str | None, Field(description="Project name for scope validation")
-    ] = None,
-) -> dict:
-    """Run network scan with scope validation."""
-    from python.tools.security.network_scanner import NetworkScanner
-    from python.helpers.assessment_state import get_assessment_state
-
-    # Scope validation if project specified
-    if project_name:
-        state = get_assessment_state(project_name)
-        if not state.is_in_scope(target):
-            return {"status": "error", "error": f"Target {target} is not in scope"}
-
-    _PRINTER.print(f"[MCP Security] Network scan requested: {target}")
-
-    success, results, raw = NetworkScanner.nmap_scan(
-        target=target,
-        ports=ports,
-        scan_type=scan_type,
-        service_detection=service_detection,
-    )
-
-    if not success:
-        return {"status": "error", "error": raw}
-
-    # Convert results to dict
-    hosts = []
-    for host in results:
-        ports_data = [
-            {
-                "port": p.port,
-                "protocol": p.protocol,
-                "state": p.state,
-                "service": p.service,
-                "version": p.version,
-            }
-            for p in host.ports
-        ]
-        hosts.append(
-            {
-                "address": host.address,
-                "hostname": host.hostname,
-                "state": host.state,
-                "ports": ports_data,
-                "os_matches": host.os_matches,
-            }
-        )
-
-    return {"status": "success", "hosts": hosts, "host_count": len(hosts)}
-
-
-WEB_SCAN_DESCRIPTION = """
-Run a web vulnerability scan using nikto or nuclei.
-Use for web server scanning, vulnerability detection, and technology fingerprinting.
-"""
-
-
-@mcp_server.tool(
-    name="web_scan",
-    description=WEB_SCAN_DESCRIPTION,
-    tags={"security", "web", "scan", "vulnerability", "nikto", "nuclei"},
-)
-async def web_scan(
-    target: Annotated[str, Field(description="Target URL (e.g., https://example.com)")],
-    scan_type: Annotated[
-        str, Field(description="Scan type: nikto, nuclei, quick")
-    ] = "quick",
-    severity_filter: Annotated[
-        str | None, Field(description="Filter by severity: critical,high,medium,low")
-    ] = None,
-    project_name: Annotated[
-        str | None, Field(description="Project name for scope validation")
-    ] = None,
-) -> dict:
-    """Run web vulnerability scan."""
-    from python.tools.security.web_scanner import WebScanner
-    from python.helpers.assessment_state import get_assessment_state
-
-    # Scope validation
-    if project_name:
-        state = get_assessment_state(project_name)
-        if not state.is_in_scope(target):
-            return {"status": "error", "error": f"Target {target} is not in scope"}
-
-    _PRINTER.print(f"[MCP Security] Web scan requested: {target} ({scan_type})")
-
-    if scan_type == "nikto":
-        success, findings, raw = WebScanner.nikto_scan(target)
-    elif scan_type == "nuclei":
-        severity = severity_filter.split(",") if severity_filter else None
-        success, findings, raw = WebScanner.nuclei_scan(target, severity=severity)
-    else:  # quick
-        success, results, summary = WebScanner.quick_web_scan(target)
-        return {
-            "status": "success" if success else "error",
-            "results": results,
-            "summary": summary,
-        }
-
-    if not success:
-        return {"status": "error", "error": raw}
-
-    findings_data = [
-        {
-            "severity": f.severity,
-            "title": f.title,
-            "description": f.description,
-            "target": f.target,
-            "evidence": f.evidence,
-        }
-        for f in findings
-    ]
-
-    return {
-        "status": "success",
-        "findings": findings_data,
-        "finding_count": len(findings),
-    }
-
-
-CODE_REVIEW_DESCRIPTION = """
-Run static code analysis (SAST) using semgrep and bandit.
-Analyzes code for security vulnerabilities, insecure patterns, and best practices.
-"""
-
-
-@mcp_server.tool(
-    name="code_review",
-    description=CODE_REVIEW_DESCRIPTION,
-    tags={"security", "code", "sast", "review", "semgrep", "bandit"},
-)
-async def code_review(
-    path: Annotated[str, Field(description="Path to file or directory to scan")],
-    language: Annotated[
-        str | None, Field(description="Language hint: python, javascript, auto")
-    ] = "auto",
-    severity_filter: Annotated[
-        str | None, Field(description="Minimum severity: low, medium, high")
-    ] = None,
-) -> dict:
-    """Run static code analysis."""
-    from python.tools.security.code_scanner import CodeScanner
-    import os
-
-    if not os.path.exists(path):
-        return {"status": "error", "error": f"Path not found: {path}"}
-
-    _PRINTER.print(f"[MCP Security] Code review requested: {path}")
-
-    if language == "auto":
-        success, results, summary = CodeScanner.auto_scan(path)
-        # Flatten results
-        all_findings = []
-        for scanner, findings in results.items():
-            for f in findings:
-                all_findings.append(
-                    {
-                        "scanner": scanner,
-                        "file": f.file,
-                        "line": f.line,
-                        "severity": f.severity,
-                        "rule_id": f.rule_id,
-                        "message": f.message,
-                        "cwe": f.cwe,
-                    }
-                )
-        return {
-            "status": "success" if success else "error",
-            "findings": all_findings,
-            "summary": summary,
-        }
-    elif language == "python":
-        success, findings, raw = CodeScanner.bandit_scan(
-            path, severity=severity_filter or "low"
-        )
-    else:
-        success, findings, raw = CodeScanner.semgrep_scan(path)
-
-    if not success:
-        return {"status": "error", "error": raw}
-
-    findings_data = [
-        {
-            "file": f.file,
-            "line": f.line,
-            "severity": f.severity,
-            "rule_id": f.rule_id,
-            "message": f.message,
-            "cwe": f.cwe,
-        }
-        for f in findings
-    ]
-
-    return {
-        "status": "success",
-        "findings": findings_data,
-        "finding_count": len(findings),
-    }
-
-
-GET_ASSESSMENT_STATE_DESCRIPTION = """
-Get the current security assessment state for a project.
-Returns targets, findings, progress, and context information.
-"""
-
-
-@mcp_server.tool(
-    name="get_assessment_state",
-    description=GET_ASSESSMENT_STATE_DESCRIPTION,
-    tags={"security", "assessment", "state", "findings"},
-)
-async def get_assessment_state_tool(
-    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
-) -> dict:
-    """Get assessment state for a project."""
-    from python.helpers.assessment_state import get_assessment_state
-
-    try:
-        state = get_assessment_state(project_name)
-        data = state.load()
-        summary = state.get_summary()
-        return {"status": "success", "state": data, "summary": summary}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-UPDATE_FINDING_DESCRIPTION = """
-Add or update a security finding in the assessment state.
-Use to record vulnerabilities discovered during testing.
-"""
-
-
-@mcp_server.tool(
-    name="update_finding",
-    description=UPDATE_FINDING_DESCRIPTION,
-    tags={"security", "assessment", "finding", "vulnerability"},
-)
-async def update_finding_tool(
-    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
-    title: Annotated[str, Field(description="Finding title")],
-    severity: Annotated[
-        str, Field(description="Severity: critical, high, medium, low, info")
-    ],
-    description: Annotated[
-        str, Field(description="Detailed description of the finding")
-    ],
-    affected: Annotated[
-        list[str] | None, Field(description="List of affected targets/URLs")
-    ] = None,
-    cwe: Annotated[
-        str | None, Field(description="CWE identifier (e.g., CWE-89)")
-    ] = None,
-    evidence: Annotated[
-        str | None, Field(description="Evidence or proof-of-concept")
-    ] = None,
-    remediation: Annotated[str | None, Field(description="Recommended fix")] = None,
-) -> dict:
-    """Add or update a finding."""
-    from python.helpers.assessment_state import get_assessment_state, FindingData
-
-    try:
-        state = get_assessment_state(project_name)
-
-        finding = FindingData(
-            severity=severity,
-            title=title,
-            description=description,
-            affected=affected or [],
-            cwe=cwe or "",
-            remediation=remediation or "",
-            found_by="claude_code",
-            status="potential",
-        )
-
-        # Save evidence if provided
-        if evidence:
-            evidence_path = state.save_evidence(
-                f"{title.replace(' ', '_')}.txt", evidence
-            )
-            if evidence_path:
-                finding["evidence"] = [evidence_path]
-
-        finding_id = state.add_finding(finding)
-
-        return {"status": "success", "finding_id": finding_id}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-ADD_TARGET_DESCRIPTION = """
-Add a target to the security assessment.
-Use to track discovered hosts, services, or web applications.
-"""
-
-
-@mcp_server.tool(
-    name="add_target",
-    description=ADD_TARGET_DESCRIPTION,
-    tags={"security", "assessment", "target", "recon"},
-)
-async def add_target_tool(
-    project_name: Annotated[str, Field(description="Name of the Agent Zero project")],
-    address: Annotated[str, Field(description="Target address (IP, hostname, or URL)")],
-    target_type: Annotated[
-        str, Field(description="Type: web, host, service, network")
-    ] = "host",
-    ports: Annotated[list[int] | None, Field(description="Open ports")] = None,
-    services: Annotated[
-        dict | None, Field(description="Port to service mapping")
-    ] = None,
-    technologies: Annotated[
-        list[str] | None, Field(description="Detected technologies")
-    ] = None,
-) -> dict:
-    """Add a target to the assessment."""
-    from python.helpers.assessment_state import get_assessment_state, TargetData
-
-    try:
-        state = get_assessment_state(project_name)
-
-        target = TargetData(
-            type=target_type,
-            address=address,
-            status="discovered",
-            ports=ports or [],
-            services=services or {},
-            technologies=technologies or [],
-        )
-
-        target_id = state.add_target(target)
-
-        return {"status": "success", "target_id": target_id}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-# =============================================================================
-# END SECURITY ASSESSMENT TOOLS
-# =============================================================================
 
 
 async def _run_chat(
@@ -664,51 +322,46 @@ class DynamicMcpProxy:
         message_path = f"/t-{self.token}/messages/"
 
         # Update settings in the MCP server instance if provided
-        mcp_server.settings.message_path = message_path
-        mcp_server.settings.sse_path = sse_path
+        # Keep FastMCP settings synchronized so downstream helpers that read these
+        # values (including deprecated accessors) resolve the runtime paths.
+        fastmcp.settings.message_path = message_path
+        fastmcp.settings.sse_path = sse_path
+        fastmcp.settings.streamable_http_path = http_path
 
         # Create new MCP apps with updated settings
         with self._lock:
+            middleware = [Middleware(BaseHTTPMiddleware, dispatch=mcp_middleware)]
+
             self.sse_app = create_sse_app(
                 server=mcp_server,
-                message_path=mcp_server.settings.message_path,
-                sse_path=mcp_server.settings.sse_path,
-                auth_server_provider=mcp_server._auth_server_provider,
-                auth_settings=mcp_server.settings.auth,
-                debug=mcp_server.settings.debug,
-                routes=mcp_server._additional_http_routes,
-                middleware=[Middleware(BaseHTTPMiddleware, dispatch=mcp_middleware)],
+                message_path=message_path,
+                sse_path=sse_path,
+                auth=mcp_server.auth,
+                debug=fastmcp.settings.debug,
+                middleware=list(middleware),
             )
 
-            # For HTTP, we need to create a custom app since the lifespan manager
-            # doesn't work properly in our Flask/Werkzeug environment
             self.http_app = self._create_custom_http_app(
                 http_path,
-                mcp_server._auth_server_provider,
-                mcp_server.settings.auth,
-                mcp_server.settings.debug,
-                mcp_server._additional_http_routes,
+                middleware=list(middleware),
             )
 
     def _create_custom_http_app(
-        self, streamable_http_path, auth_server_provider, auth_settings, debug, routes
-    ):
-        """Create a custom HTTP app that manages the session manager manually."""
-        from fastmcp.server.http import (
-            setup_auth_middleware_and_routes,
-            create_base_app,
-        )
-        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-        from starlette.routing import Mount
-        from mcp.server.auth.middleware.bearer_auth import RequireAuthMiddleware
+        self,
+        streamable_http_path: str,
+        *,
+        middleware: list[Middleware],
+    ) -> ASGIApp:
+        """Create a Streamable HTTP app with manual session manager lifecycle."""
+
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager  # type: ignore
+        from mcp.server.auth.middleware.bearer_auth import RequireAuthMiddleware  # type: ignore
         import anyio
 
         server_routes = []
         server_middleware = []
 
         self.http_session_task_group = None
-
-        # Create session manager
         self.http_session_manager = StreamableHTTPSessionManager(
             app=mcp_server._mcp_server,
             event_store=None,
@@ -716,9 +369,7 @@ class DynamicMcpProxy:
             stateless=False,
         )
 
-        # Custom ASGI handler that ensures task group is initialized
         async def handle_streamable_http(scope, receive, send):
-            # Lazy initialization of task group
             if self.http_session_task_group is None:
                 self.http_session_task_group = anyio.create_task_group()
                 await self.http_session_task_group.__aenter__()
@@ -728,20 +379,25 @@ class DynamicMcpProxy:
             if self.http_session_manager:
                 await self.http_session_manager.handle_request(scope, receive, send)
 
-        # Get auth middleware and routes
-        auth_middleware, auth_routes, required_scopes = (
-            setup_auth_middleware_and_routes(auth_server_provider, auth_settings)
-        )
+        auth_provider = mcp_server.auth
 
-        server_routes.extend(auth_routes)
-        server_middleware.extend(auth_middleware)
+        if auth_provider:
+            server_routes.extend(auth_provider.get_routes(mcp_path=streamable_http_path))
+            server_middleware.extend(auth_provider.get_middleware())
 
-        # Add StreamableHTTP routes with or without auth
-        if auth_server_provider:
+            resource_url = auth_provider._get_resource_url(streamable_http_path)
+            resource_metadata_url = (
+                build_resource_metadata_url(resource_url) if resource_url else None
+            )
+
             server_routes.append(
                 Mount(
                     streamable_http_path,
-                    app=RequireAuthMiddleware(handle_streamable_http, required_scopes),
+                    app=RequireAuthMiddleware(
+                        handle_streamable_http,
+                        auth_provider.required_scopes,
+                        resource_metadata_url,
+                    ),
                 )
             )
         else:
@@ -752,20 +408,16 @@ class DynamicMcpProxy:
                 )
             )
 
-        # Add custom routes with lowest precedence
-        if routes:
-            server_routes.extend(routes)
+        additional_routes = mcp_server._get_additional_http_routes()
+        if additional_routes:
+            server_routes.extend(additional_routes)
 
-        # Add middleware
-        server_middleware.append(
-            Middleware(BaseHTTPMiddleware, dispatch=mcp_middleware)
-        )
+        server_middleware.extend(middleware)
 
-        # Create and return the app
         return create_base_app(
             routes=server_routes,
             middleware=server_middleware,
-            debug=debug,
+            debug=fastmcp.settings.debug,
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -780,17 +432,52 @@ class DynamicMcpProxy:
         # Route based on path
         path = scope.get("path", "")
 
-        if f"/t-{self.token}/sse" in path or f"t-{self.token}/messages" in path:
-            # Route to SSE app
-            await sse_app(scope, receive, send)
-        elif f"/t-{self.token}/http" in path:
-            # Route to HTTP app
-            await http_app(scope, receive, send)
+        # Check for token in path (with or without project segment)
+        # Patterns: /t-{token}/sse, /t-{token}/p-{project}/sse, etc.
+        has_token = f"/t-{self.token}/" in path or f"t-{self.token}/" in path
+
+        # Extract project from path BEFORE cleaning and set in context variable
+        project_name = None
+        if "/p-" in path:
+            try:
+                parts = path.split("/p-")
+                if len(parts) > 1:
+                    project_part = parts[1].split("/")[0]
+                    if project_part:
+                        project_name = project_part
+                        _PRINTER.print(f"[MCP] Proxy extracted project from URL: {project_name}")
+            except Exception as e:
+                _PRINTER.print(f"[MCP] Failed to extract project in proxy: {e}")
+
+        # Store project in context variable (will be available in send_message)
+        _mcp_project_name.set(project_name)
+
+        # Strip project segment from path if present (e.g., /p-project_name/)
+        # This is needed because the underlying MCP apps were configured without project paths
+        cleaned_path = path
+        if "/p-" in path:
+            # Remove /p-{project}/ segment: /t-TOKEN/p-PROJECT/sse -> /t-TOKEN/sse
+            import re
+            cleaned_path = re.sub(r'/p-[^/]+/', '/', path)
+
+        # Update scope with cleaned path for the underlying app
+        modified_scope = dict(scope)
+        modified_scope['path'] = cleaned_path
+
+        if has_token and ("/sse" in path or "/messages" in path):
+            # Route to SSE app with cleaned path
+            await sse_app(modified_scope, receive, send)
+        elif has_token and "/http" in path:
+            # Route to HTTP app with cleaned path
+            await http_app(modified_scope, receive, send)
         else:
-            raise StarletteHTTPException(status_code=403, detail="MCP forbidden")
+            raise StarletteHTTPException(
+                status_code=403, detail="MCP forbidden"
+            )
 
 
 async def mcp_middleware(request: Request, call_next):
+    """Middleware to check if MCP server is enabled."""
     # check if MCP server is enabled
     cfg = settings.get_settings()
     if not cfg["mcp_server_enabled"]:

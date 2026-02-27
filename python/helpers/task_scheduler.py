@@ -7,38 +7,26 @@ from urllib.parse import urlparse
 import uuid
 from enum import Enum
 from os.path import exists
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Literal,
-    Optional,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-    ClassVar,
-)
+from typing import Any, Callable, Dict, Literal, Optional, Type, TypeVar, Union, cast, ClassVar
 
 import nest_asyncio
-
 nest_asyncio.apply()
 
 from crontab import CronTab
 from pydantic import BaseModel, Field, PrivateAttr
 
-from agent import AgentContext, UserMessage
+from agent import Agent, AgentContext, UserMessage
 from initialize import initialize_agent
 from python.helpers.persist_chat import save_tmp_chat
 from python.helpers.print_style import PrintStyle
 from python.helpers.defer import DeferredTask
 from python.helpers.files import get_abs_path, make_dirs, read_file, write_file
 from python.helpers.localization import Localization
-from python.helpers import projects
+from python.helpers import projects, guids
 import pytz
 from typing import Annotated
 
-SCHEDULER_FOLDER = "tmp/scheduler"
+SCHEDULER_FOLDER = "usr/scheduler"
 
 # ----------------------
 # Task Models
@@ -76,12 +64,7 @@ class TaskPlan(BaseModel):
     done: list[datetime] = Field(default_factory=list)
 
     @classmethod
-    def create(
-        cls,
-        todo: list[datetime] = list(),
-        in_progress: datetime | None = None,
-        done: list[datetime] = list(),
-    ):
+    def create(cls, todo: list[datetime] = list(), in_progress: datetime | None = None, done: list[datetime] = list()):
         if todo:
             for idx, dt in enumerate(todo):
                 if dt.tzinfo is None:
@@ -114,9 +97,7 @@ class TaskPlan(BaseModel):
         if launch_time.tzinfo is None:
             launch_time = pytz.timezone("UTC").localize(launch_time)
         if launch_time != self.in_progress:
-            raise ValueError(
-                f"Launch time {launch_time} is not the same as in progress time {self.in_progress}"
-            )
+            raise ValueError(f"Launch time {launch_time} is not the same as in progress time {self.in_progress}")
         if launch_time in self.done:
             raise ValueError(f"Launch time {launch_time} already in done list")
         self.in_progress = None
@@ -137,7 +118,7 @@ class TaskPlan(BaseModel):
 
 
 class BaseTask(BaseModel):
-    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    uuid: str = Field(default_factory=lambda: guids.generate_id())
     context_id: Optional[str] = Field(default=None)
     state: TaskState = Field(default=TaskState.IDLE)
     name: str = Field()
@@ -157,18 +138,16 @@ class BaseTask(BaseModel):
             self.context_id = self.uuid
         self._lock = threading.RLock()
 
-    def update(
-        self,
-        name: str | None = None,
-        state: TaskState | None = None,
-        system_prompt: str | None = None,
-        prompt: str | None = None,
-        attachments: list[str] | None = None,
-        last_run: datetime | None = None,
-        last_result: str | None = None,
-        context_id: str | None = None,
-        **kwargs,
-    ):
+    def update(self,
+               name: str | None = None,
+               state: TaskState | None = None,
+               system_prompt: str | None = None,
+               prompt: str | None = None,
+               attachments: list[str] | None = None,
+               last_run: datetime | None = None,
+               last_result: str | None = None,
+               context_id: str | None = None,
+               **kwargs):
         with self._lock:
             if name is not None:
                 self.name = name
@@ -221,7 +200,8 @@ class BaseTask(BaseModel):
         # Ensure that updated_at is refreshed to reflect completion time
         # This helps track when the task actually finished, regardless of success/error
         await TaskScheduler.get().update_task(
-            self.uuid, updated_at=datetime.now(timezone.utc)
+            self.uuid,
+            updated_at=datetime.now(timezone.utc)
         )
 
     async def on_error(self, error: str):
@@ -232,10 +212,10 @@ class BaseTask(BaseModel):
             self.uuid,
             state=TaskState.ERROR,
             last_run=datetime.now(timezone.utc),
-            last_result=f"ERROR: {error}",
+            last_result=f"ERROR: {error}"
         )
         if not updated_task:
-            PrintStyle(italic=True, font_color="red", padding=False).print(
+            PrintStyle.error(
                 f"Failed to update task {self.uuid} state to ERROR after error: {error}"
             )
         await scheduler.save()  # Force save after update
@@ -248,10 +228,10 @@ class BaseTask(BaseModel):
             self.uuid,
             state=TaskState.IDLE,
             last_run=datetime.now(timezone.utc),
-            last_result=result,
+            last_result=result
         )
         if not updated_task:
-            PrintStyle(italic=True, font_color="red", padding=False).print(
+            PrintStyle.error(
                 f"Failed to update task {self.uuid} state to IDLE after success"
             )
         await scheduler.save()  # Force save after update
@@ -259,11 +239,7 @@ class BaseTask(BaseModel):
 
 class AdHocTask(BaseTask):
     type: Literal[TaskType.AD_HOC] = TaskType.AD_HOC
-    token: str = Field(
-        default_factory=lambda: str(
-            random.randint(1000000000000000000, 9999999999999999999)
-        )
-    )
+    token: str = Field(default_factory=lambda: str(random.randint(1000000000000000000, 9999999999999999999)))
 
     @classmethod
     def create(
@@ -275,44 +251,38 @@ class AdHocTask(BaseTask):
         attachments: list[str] = list(),
         context_id: str | None = None,
         project_name: str | None = None,
-        project_color: str | None = None,
+        project_color: str | None = None
     ):
-        return cls(
-            name=name,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            attachments=attachments,
-            token=token,
-            context_id=context_id,
-            project_name=project_name,
-            project_color=project_color,
-        )
+        return cls(name=name,
+                   system_prompt=system_prompt,
+                   prompt=prompt,
+                   attachments=attachments,
+                   token=token,
+                   context_id=context_id,
+                   project_name=project_name,
+                   project_color=project_color)
 
-    def update(
-        self,
-        name: str | None = None,
-        state: TaskState | None = None,
-        system_prompt: str | None = None,
-        prompt: str | None = None,
-        attachments: list[str] | None = None,
-        last_run: datetime | None = None,
-        last_result: str | None = None,
-        context_id: str | None = None,
-        token: str | None = None,
-        **kwargs,
-    ):
-        super().update(
-            name=name,
-            state=state,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            attachments=attachments,
-            last_run=last_run,
-            last_result=last_result,
-            context_id=context_id,
-            token=token,
-            **kwargs,
-        )
+    def update(self,
+               name: str | None = None,
+               state: TaskState | None = None,
+               system_prompt: str | None = None,
+               prompt: str | None = None,
+               attachments: list[str] | None = None,
+               last_run: datetime | None = None,
+               last_result: str | None = None,
+               context_id: str | None = None,
+               token: str | None = None,
+               **kwargs):
+        super().update(name=name,
+                       state=state,
+                       system_prompt=system_prompt,
+                       prompt=prompt,
+                       attachments=attachments,
+                       last_run=last_run,
+                       last_result=last_result,
+                       context_id=context_id,
+                       token=token,
+                       **kwargs)
 
 
 class ScheduledTask(BaseTask):
@@ -338,61 +308,52 @@ class ScheduledTask(BaseTask):
         else:
             schedule.timezone = Localization.get().get_timezone()
 
-        return cls(
-            name=name,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            attachments=attachments,
-            schedule=schedule,
-            context_id=context_id,
-            project_name=project_name,
-            project_color=project_color,
-        )
+        return cls(name=name,
+                   system_prompt=system_prompt,
+                   prompt=prompt,
+                   attachments=attachments,
+                   schedule=schedule,
+                   context_id=context_id,
+                   project_name=project_name,
+                   project_color=project_color)
 
-    def update(
-        self,
-        name: str | None = None,
-        state: TaskState | None = None,
-        system_prompt: str | None = None,
-        prompt: str | None = None,
-        attachments: list[str] | None = None,
-        last_run: datetime | None = None,
-        last_result: str | None = None,
-        context_id: str | None = None,
-        schedule: TaskSchedule | None = None,
-        **kwargs,
-    ):
-        super().update(
-            name=name,
-            state=state,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            attachments=attachments,
-            last_run=last_run,
-            last_result=last_result,
-            context_id=context_id,
-            schedule=schedule,
-            **kwargs,
-        )
+    def update(self,
+               name: str | None = None,
+               state: TaskState | None = None,
+               system_prompt: str | None = None,
+               prompt: str | None = None,
+               attachments: list[str] | None = None,
+               last_run: datetime | None = None,
+               last_result: str | None = None,
+               context_id: str | None = None,
+               schedule: TaskSchedule | None = None,
+               **kwargs):
+        super().update(name=name,
+                       state=state,
+                       system_prompt=system_prompt,
+                       prompt=prompt,
+                       attachments=attachments,
+                       last_run=last_run,
+                       last_result=last_result,
+                       context_id=context_id,
+                       schedule=schedule,
+                       **kwargs)
 
     def check_schedule(self, frequency_seconds: float = 60.0) -> bool:
         with self._lock:
             crontab = CronTab(crontab=self.schedule.to_crontab())  # type: ignore
 
             # Get the timezone from the schedule or use UTC as fallback
-            task_timezone = pytz.timezone(
-                self.schedule.timezone or Localization.get().get_timezone()
-            )
+            task_timezone = pytz.timezone(self.schedule.timezone or Localization.get().get_timezone())
 
             # Get reference time in task's timezone (by default now - frequency_seconds)
-            reference_time = datetime.now(timezone.utc) - timedelta(
-                seconds=frequency_seconds
-            )
+            reference_time = datetime.now(timezone.utc) - timedelta(seconds=frequency_seconds)
             reference_time = reference_time.astimezone(task_timezone)
 
             # Get next run time as seconds until next execution
             next_run_seconds: Optional[float] = crontab.next(  # type: ignore
-                now=reference_time, return_datetime=False
+                now=reference_time,
+                return_datetime=False
             )  # type: ignore
 
             if next_run_seconds is None:
@@ -420,44 +381,38 @@ class PlannedTask(BaseTask):
         attachments: list[str] = list(),
         context_id: str | None = None,
         project_name: str | None = None,
-        project_color: str | None = None,
+        project_color: str | None = None
     ):
-        return cls(
-            name=name,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            plan=plan,
-            attachments=attachments,
-            context_id=context_id,
-            project_name=project_name,
-            project_color=project_color,
-        )
+        return cls(name=name,
+                   system_prompt=system_prompt,
+                   prompt=prompt,
+                   plan=plan,
+                   attachments=attachments,
+                   context_id=context_id,
+                   project_name=project_name,
+                   project_color=project_color)
 
-    def update(
-        self,
-        name: str | None = None,
-        state: TaskState | None = None,
-        system_prompt: str | None = None,
-        prompt: str | None = None,
-        attachments: list[str] | None = None,
-        last_run: datetime | None = None,
-        last_result: str | None = None,
-        context_id: str | None = None,
-        plan: TaskPlan | None = None,
-        **kwargs,
-    ):
-        super().update(
-            name=name,
-            state=state,
-            system_prompt=system_prompt,
-            prompt=prompt,
-            attachments=attachments,
-            last_run=last_run,
-            last_result=last_result,
-            context_id=context_id,
-            plan=plan,
-            **kwargs,
-        )
+    def update(self,
+               name: str | None = None,
+               state: TaskState | None = None,
+               system_prompt: str | None = None,
+               prompt: str | None = None,
+               attachments: list[str] | None = None,
+               last_run: datetime | None = None,
+               last_result: str | None = None,
+               context_id: str | None = None,
+               plan: TaskPlan | None = None,
+               **kwargs):
+        super().update(name=name,
+                       state=state,
+                       system_prompt=system_prompt,
+                       prompt=prompt,
+                       attachments=attachments,
+                       last_run=last_run,
+                       last_result=last_result,
+                       context_id=context_id,
+                       plan=plan,
+                       **kwargs)
 
     def check_schedule(self, frequency_seconds: float = 60.0) -> bool:
         with self._lock:
@@ -505,11 +460,7 @@ class PlannedTask(BaseTask):
 
 
 class SchedulerTaskList(BaseModel):
-    tasks: list[
-        Annotated[
-            Union[ScheduledTask, AdHocTask, PlannedTask], Field(discriminator="type")
-        ]
-    ] = Field(default_factory=list)
+    tasks: list[Annotated[Union[ScheduledTask, AdHocTask, PlannedTask], Field(discriminator="type")]] = Field(default_factory=list)
     # Singleton instance
     __instance: ClassVar[Optional["SchedulerTaskList"]] = PrivateAttr(default=None)
 
@@ -541,9 +492,7 @@ class SchedulerTaskList(BaseModel):
                 self.tasks.extend(data.tasks)
         return self
 
-    async def add_task(
-        self, task: Union[ScheduledTask, AdHocTask, PlannedTask]
-    ) -> "SchedulerTaskList":
+    async def add_task(self, task: Union[ScheduledTask, AdHocTask, PlannedTask]) -> "SchedulerTaskList":
         with self._lock:
             self.tasks.append(task)
             await self.save()
@@ -555,14 +504,12 @@ class SchedulerTaskList(BaseModel):
             for task in self.tasks:
                 if isinstance(task, AdHocTask):
                     if task.token is None or task.token == "":
-                        PrintStyle(italic=True, font_color="red", padding=False).print(
+                        PrintStyle.warning(
                             f"WARNING: AdHocTask {task.name} ({task.uuid}) has a null or empty token before saving: '{task.token}'"
                         )
                         # Generate a new token to prevent errors
-                        task.token = str(
-                            random.randint(1000000000000000000, 9999999999999999999)
-                        )
-                        PrintStyle(italic=True, font_color="red", padding=False).print(
+                        task.token = str(random.randint(1000000000000000000, 9999999999999999999))
+                        PrintStyle.info(
                             f"Fixed: Generated new token '{task.token}' for task {task.name}"
                         )
 
@@ -575,7 +522,7 @@ class SchedulerTaskList(BaseModel):
 
             # Debug: check if 'null' appears as token value in JSON
             if '"type": "adhoc"' in json_data and '"token": null' in json_data:
-                PrintStyle(italic=True, font_color="red", padding=False).print(
+                PrintStyle.error(
                     "ERROR: Found null token in JSON output for an adhoc task"
                 )
 
@@ -585,7 +532,7 @@ class SchedulerTaskList(BaseModel):
             if exists(path):
                 loaded_json = read_file(path)
                 if '"type": "adhoc"' in loaded_json and '"token": null' in loaded_json:
-                    PrintStyle(italic=True, font_color="red", padding=False).print(
+                    PrintStyle.error(
                         "ERROR: Null token persisted in JSON file for an adhoc task"
                     )
 
@@ -595,9 +542,7 @@ class SchedulerTaskList(BaseModel):
         self,
         task_uuid: str,
         updater_func: Callable[[Union[ScheduledTask, AdHocTask, PlannedTask]], None],
-        verify_func: Callable[
-            [Union[ScheduledTask, AdHocTask, PlannedTask]], bool
-        ] = lambda task: True,
+        verify_func: Callable[[Union[ScheduledTask, AdHocTask, PlannedTask]], bool] = lambda task: True
     ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         """
         Atomically update a task by UUID using the provided updater function.
@@ -612,14 +557,7 @@ class SchedulerTaskList(BaseModel):
             await self.reload()
 
             # Find the task
-            task = next(
-                (
-                    task
-                    for task in self.tasks
-                    if task.uuid == task_uuid and verify_func(task)
-                ),
-                None,
-            )
+            task = next((task for task in self.tasks if task.uuid == task_uuid and verify_func(task)), None)
             if task is None:
                 return None
 
@@ -635,13 +573,10 @@ class SchedulerTaskList(BaseModel):
         with self._lock:
             return self.tasks
 
-    def get_tasks_by_context_id(
-        self, context_id: str, only_running: bool = False
-    ) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
+    def get_tasks_by_context_id(self, context_id: str, only_running: bool = False) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
         with self._lock:
             return [
-                task
-                for task in self.tasks
+                task for task in self.tasks
                 if task.context_id == context_id
                 and (not only_running or task.state == TaskState.RUNNING)
             ]
@@ -650,26 +585,19 @@ class SchedulerTaskList(BaseModel):
         with self._lock:
             await self.reload()
             return [
-                task
-                for task in self.tasks
+                task for task in self.tasks
                 if task.check_schedule() and task.state == TaskState.IDLE
             ]
 
-    def get_task_by_uuid(
-        self, task_uuid: str
-    ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
+    def get_task_by_uuid(self, task_uuid: str) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         with self._lock:
             return next((task for task in self.tasks if task.uuid == task_uuid), None)
 
-    def get_task_by_name(
-        self, name: str
-    ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
+    def get_task_by_name(self, name: str) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         with self._lock:
             return next((task for task in self.tasks if task.name == name), None)
 
-    def find_task_by_name(
-        self, name: str
-    ) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
+    def find_task_by_name(self, name: str) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
         with self._lock:
             return [task for task in self.tasks if name.lower() in task.name.lower()]
 
@@ -687,9 +615,12 @@ class SchedulerTaskList(BaseModel):
 
 
 class TaskScheduler:
+
     _tasks: SchedulerTaskList
     _printer: PrintStyle
     _instance = None
+    _running_deferred_tasks: Dict[str, DeferredTask]
+    _running_tasks_lock: threading.RLock
 
     @classmethod
     def get(cls) -> "TaskScheduler":
@@ -699,10 +630,40 @@ class TaskScheduler:
 
     def __init__(self):
         # Only initialize if this is a new instance
-        if not hasattr(self, "_initialized"):
+        if not hasattr(self, '_initialized'):
             self._tasks = SchedulerTaskList.get()
             self._printer = PrintStyle(italic=True, font_color="green", padding=False)
+            self._running_deferred_tasks = {}
+            self._running_tasks_lock = threading.RLock()
             self._initialized = True
+
+    def _register_running_task(self, task_uuid: str, deferred_task: DeferredTask) -> None:
+        with self._running_tasks_lock:
+            self._running_deferred_tasks[task_uuid] = deferred_task
+
+    def _unregister_running_task(self, task_uuid: str) -> None:
+        with self._running_tasks_lock:
+            self._running_deferred_tasks.pop(task_uuid, None)
+
+    def cancel_running_task(self, task_uuid: str, terminate_thread: bool = False) -> bool:
+        with self._running_tasks_lock:
+            deferred_task = self._running_deferred_tasks.get(task_uuid)
+        if not deferred_task:
+            return False
+        PrintStyle.info(f"Scheduler cancelling task {task_uuid}")
+        deferred_task.kill(terminate_thread=terminate_thread)
+        return True
+
+    def cancel_tasks_by_context(self, context_id: str, terminate_thread: bool = False) -> bool:
+        cancelled_any = False
+        with self._running_tasks_lock:
+            running_tasks = list(self._running_deferred_tasks.keys())
+        for task_uuid in running_tasks:
+            task = self.get_task_by_uuid(task_uuid)
+            if task and task.context_id == context_id:
+                if self.cancel_running_task(task_uuid, terminate_thread=terminate_thread):
+                    cancelled_any = True
+        return cancelled_any
 
     async def reload(self):
         await self._tasks.reload()
@@ -710,39 +671,35 @@ class TaskScheduler:
     def get_tasks(self) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
         return self._tasks.get_tasks()
 
-    def get_tasks_by_context_id(
-        self, context_id: str, only_running: bool = False
-    ) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
+    def get_tasks_by_context_id(self, context_id: str, only_running: bool = False) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
         return self._tasks.get_tasks_by_context_id(context_id, only_running)
 
-    async def add_task(
-        self, task: Union[ScheduledTask, AdHocTask, PlannedTask]
-    ) -> "TaskScheduler":
+    async def add_task(self, task: Union[ScheduledTask, AdHocTask, PlannedTask]) -> "TaskScheduler":
         await self._tasks.add_task(task)
-        await self._get_chat_context(task)  # invoke context creation
+        ctx = await self._get_chat_context(task)  # invoke context creation
+        from python.helpers.state_monitor_integration import mark_dirty_all
+        mark_dirty_all(reason="task_scheduler.TaskScheduler.add_task")
         return self
 
     async def remove_task_by_uuid(self, task_uuid: str) -> "TaskScheduler":
         await self._tasks.remove_task_by_uuid(task_uuid)
+        from python.helpers.state_monitor_integration import mark_dirty_all
+        mark_dirty_all(reason="task_scheduler.TaskScheduler.remove_task_by_uuid")
         return self
 
     async def remove_task_by_name(self, name: str) -> "TaskScheduler":
         await self._tasks.remove_task_by_name(name)
+        from python.helpers.state_monitor_integration import mark_dirty_all
+        mark_dirty_all(reason="task_scheduler.TaskScheduler.remove_task_by_name")
         return self
 
-    def get_task_by_uuid(
-        self, task_uuid: str
-    ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
+    def get_task_by_uuid(self, task_uuid: str) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         return self._tasks.get_task_by_uuid(task_uuid)
 
-    def get_task_by_name(
-        self, name: str
-    ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
+    def get_task_by_name(self, name: str) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         return self._tasks.get_task_by_name(name)
 
-    def find_task_by_name(
-        self, name: str
-    ) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
+    def find_task_by_name(self, name: str) -> list[Union[ScheduledTask, AdHocTask, PlannedTask]]:
         return self._tasks.find_task_by_name(name)
 
     async def tick(self):
@@ -768,17 +725,13 @@ class TaskScheduler:
 
         # If the task is in error state, reset it to IDLE first
         if task.state == TaskState.ERROR:
-            self._printer.print(
-                f"Resetting task '{task.name}' from ERROR to IDLE state before running"
-            )
+            PrintStyle.info(f"Resetting task '{task.name}' from ERROR to IDLE state before running")
             await self.update_task(task_uuid, state=TaskState.IDLE)
             # Force a reload to ensure we have the updated state
             await self._tasks.reload()
             task = self.get_task_by_uuid(task_uuid)
             if not task:
-                raise ValueError(
-                    f"Task with UUID '{task_uuid}' not found after state reset"
-                )
+                raise ValueError(f"Task with UUID '{task_uuid}' not found after state reset")
 
         # Run the task
         await self._run_task(task, task_context)
@@ -795,10 +748,8 @@ class TaskScheduler:
     async def update_task_checked(
         self,
         task_uuid: str,
-        verify_func: Callable[
-            [Union[ScheduledTask, AdHocTask, PlannedTask]], bool
-        ] = lambda task: True,
-        **update_params,
+        verify_func: Callable[[Union[ScheduledTask, AdHocTask, PlannedTask]], bool] = lambda task: True,
+        **update_params
     ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
         """
         Atomically update a task by UUID with the provided parameters.
@@ -806,24 +757,19 @@ class TaskScheduler:
 
         Returns the updated task or None if not found.
         """
-
         def _update_task(task):
             task.update(**update_params)
 
-        return await self._tasks.update_task_by_uuid(
-            task_uuid, _update_task, verify_func
-        )
+        updated = await self._tasks.update_task_by_uuid(task_uuid, _update_task, verify_func)
+        if updated is not None:
+            from python.helpers.state_monitor_integration import mark_dirty_all
+            mark_dirty_all(reason="task_scheduler.TaskScheduler.update_task_checked")
+        return updated
 
-    async def update_task(
-        self, task_uuid: str, **update_params
-    ) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
-        return await self.update_task_checked(
-            task_uuid, lambda task: True, **update_params
-        )
+    async def update_task(self, task_uuid: str, **update_params) -> Union[ScheduledTask, AdHocTask, PlannedTask] | None:
+        return await self.update_task_checked(task_uuid, lambda task: True, **update_params)
 
-    async def __new_context(
-        self, task: Union[ScheduledTask, AdHocTask, PlannedTask]
-    ) -> AgentContext:
+    async def __new_context(self, task: Union[ScheduledTask, AdHocTask, PlannedTask]) -> AgentContext:
         if not task.context_id:
             raise ValueError(f"Task {task.name} has no context ID")
 
@@ -841,68 +787,52 @@ class TaskScheduler:
         save_tmp_chat(context)
         return context
 
-    async def _get_chat_context(
-        self, task: Union[ScheduledTask, AdHocTask, PlannedTask]
-    ) -> AgentContext:
+    async def _get_chat_context(self, task: Union[ScheduledTask, AdHocTask, PlannedTask]) -> AgentContext:
         context = AgentContext.get(task.context_id) if task.context_id else None
 
         if context:
             assert isinstance(context, AgentContext)
-            self._printer.print(
+            PrintStyle.info(
                 f"Scheduler Task {task.name} loaded from task {task.uuid}, context ok"
             )
             save_tmp_chat(context)
             return context
         else:
-            self._printer.print(
+            PrintStyle.warning(
                 f"Scheduler Task {task.name} loaded from task {task.uuid} but context not found"
             )
             return await self.__new_context(task)
 
-    async def _persist_chat(
-        self, task: Union[ScheduledTask, AdHocTask, PlannedTask], context: AgentContext
-    ):
+    async def _persist_chat(self, task: Union[ScheduledTask, AdHocTask, PlannedTask], context: AgentContext):
         if context.id != task.context_id:
-            raise ValueError(
-                f"Context ID mismatch for task {task.name}: context {context.id} != task {task.context_id}"
-            )
+            raise ValueError(f"Context ID mismatch for task {task.name}: context {context.id} != task {task.context_id}")
         save_tmp_chat(context)
 
-    async def _run_task(
-        self,
-        task: Union[ScheduledTask, AdHocTask, PlannedTask],
-        task_context: str | None = None,
-    ):
+    async def _run_task(self, task: Union[ScheduledTask, AdHocTask, PlannedTask], task_context: str | None = None):
+
         async def _run_task_wrapper(task_uuid: str, task_context: str | None = None):
+
             # preflight checks with a snapshot of the task
-            task_snapshot: Union[ScheduledTask, AdHocTask, PlannedTask] | None = (
-                self.get_task_by_uuid(task_uuid)
-            )
+            task_snapshot: Union[ScheduledTask, AdHocTask, PlannedTask] | None = self.get_task_by_uuid(task_uuid)
             if task_snapshot is None:
-                self._printer.print(f"Scheduler Task with UUID '{task_uuid}' not found")
+                PrintStyle.error(f"Scheduler Task with UUID '{task_uuid}' not found")
+                self._unregister_running_task(task_uuid)
                 return
             if task_snapshot.state == TaskState.RUNNING:
-                self._printer.print(
-                    f"Scheduler Task '{task_snapshot.name}' already running, skipping"
-                )
+                PrintStyle.warning(f"Scheduler Task '{task_snapshot.name}' already running, skipping")
+                self._unregister_running_task(task_uuid)
                 return
 
             # Atomically fetch and check the task's current state
-            current_task = await self.update_task_checked(
-                task_uuid,
-                lambda task: task.state != TaskState.RUNNING,
-                state=TaskState.RUNNING,
-            )
+            current_task = await self.update_task_checked(task_uuid, lambda task: task.state != TaskState.RUNNING, state=TaskState.RUNNING)
             if not current_task:
-                self._printer.print(
-                    f"Scheduler Task with UUID '{task_uuid}' not found or updated by another process"
-                )
+                PrintStyle.error(f"Scheduler Task with UUID '{task_uuid}' not found or updated by another process")
+                self._unregister_running_task(task_uuid)
                 return
             if current_task.state != TaskState.RUNNING:
                 # This means the update failed due to state conflict
-                self._printer.print(
-                    f"Scheduler Task '{current_task.name}' state is '{current_task.state}', skipping"
-                )
+                PrintStyle.warning(f"Scheduler Task '{current_task.name}' state is '{current_task.state}', skipping")
+                self._unregister_running_task(task_uuid)
                 return
 
             await current_task.on_run()
@@ -911,7 +841,7 @@ class TaskScheduler:
             agent = None
 
             try:
-                self._printer.print(f"Scheduler Task '{current_task.name}' started")
+                PrintStyle.info(f"Scheduler Task '{current_task.name}' started")
 
                 context = await self._get_chat_context(current_task)
                 AgentContext.use(context.id)
@@ -931,22 +861,12 @@ class TaskScheduler:
                         else:
                             try:
                                 url = urlparse(attachment)
-                                if url.scheme in [
-                                    "http",
-                                    "https",
-                                    "ftp",
-                                    "ftps",
-                                    "sftp",
-                                ]:
+                                if url.scheme in ["http", "https", "ftp", "ftps", "sftp"]:
                                     attachment_filenames.append(attachment)
                                 else:
-                                    self._printer.print(
-                                        f"Skipping attachment: [{attachment}]"
-                                    )
+                                    PrintStyle.warning(f"Skipping attachment: [{attachment}]")
                             except Exception:
-                                self._printer.print(
-                                    f"Skipping attachment: [{attachment}]"
-                                )
+                                PrintStyle.warning(f"Skipping attachment: [{attachment}]")
 
                 self._printer.print("User message:")
                 self._printer.print(f"> {current_task.prompt}")
@@ -964,7 +884,7 @@ class TaskScheduler:
                 # Log the message with message_id and attachments
                 context.log.log(
                     type="user",
-                    heading="User message",
+                    heading="",
                     content=task_prompt,
                     kvps={"attachments": attachment_filenames},
                     id=str(uuid.uuid4()),
@@ -974,9 +894,7 @@ class TaskScheduler:
                     UserMessage(
                         message=task_prompt,
                         system_message=[current_task.system_prompt],
-                        attachments=attachment_filenames,
-                    )
-                )
+                        attachments=attachment_filenames))
 
                 # Persist after setting up the context but before running the agent
                 # This ensures the task context is saved and can be found by polling
@@ -985,9 +903,7 @@ class TaskScheduler:
                 result = await agent.monologue()
 
                 # Success
-                self._printer.print(
-                    f"Scheduler Task '{current_task.name}' completed: {result}"
-                )
+                PrintStyle.success(f"Scheduler Task '{current_task.name}' completed: {result}")
                 await self._persist_chat(current_task, context)
                 await current_task.on_success(result)
 
@@ -995,40 +911,57 @@ class TaskScheduler:
                 await self._tasks.reload()
                 updated_task = self.get_task_by_uuid(task_uuid)
                 if updated_task and updated_task.state != TaskState.IDLE:
-                    self._printer.print(
-                        f"Fixing task state consistency: '{current_task.name}' state is not IDLE after success"
-                    )
+                    PrintStyle.warning(f"Fixing task state consistency: '{current_task.name}' state is not IDLE after success")
                     await self.update_task(task_uuid, state=TaskState.IDLE)
 
+            except asyncio.CancelledError:
+                PrintStyle.warning(f"Scheduler Task '{current_task.name}' cancelled by user")
+                try:
+                    await asyncio.shield(self.update_task(task_uuid, state=TaskState.IDLE))
+                except Exception:
+                    pass
+                raise
             except Exception as e:
                 # Error
-                self._printer.print(f"Scheduler Task '{current_task.name}' failed: {e}")
+                PrintStyle.error(f"Scheduler Task '{current_task.name}' failed: {e}")
                 await current_task.on_error(str(e))
 
                 # Explicitly verify task was updated in storage after error
                 await self._tasks.reload()
                 updated_task = self.get_task_by_uuid(task_uuid)
                 if updated_task and updated_task.state != TaskState.ERROR:
-                    self._printer.print(
-                        f"Fixing task state consistency: '{current_task.name}' state is not ERROR after failure"
-                    )
+                    PrintStyle.warning(f"Fixing task state consistency: '{current_task.name}' state is not ERROR after failure")
                     await self.update_task(task_uuid, state=TaskState.ERROR)
 
                 if agent:
                     agent.handle_critical_exception(e)
             finally:
                 # Call on_finish for task-specific cleanup
-                await current_task.on_finish()
+                try:
+                    await asyncio.shield(current_task.on_finish())
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
 
                 # Make one final save to ensure all states are persisted
-                await self._tasks.save()
+                try:
+                    await asyncio.shield(self._tasks.save())
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+
+                self._unregister_running_task(task_uuid)
 
         deferred_task = DeferredTask(thread_name=self.__class__.__name__)
+        self._register_running_task(task.uuid, deferred_task)
         deferred_task.start_task(_run_task_wrapper, task.uuid, task_context)
 
-        # Ensure background execution doesn't exit immediately on async await, especially in script contexts
-        # This helps prevent premature exits when running from non-event-loop contexts
-        asyncio.create_task(asyncio.sleep(0.1))
+        # Ensure background execution doesn't exit immediately on async await, especially in script contexts.
+        # Yielding briefly keeps callers like CLI scripts alive long enough for the DeferredTask thread to spin up
+        # without leaving stray pending tasks that trigger \"Task was destroyed\" warnings when the loop shuts down.
+        await asyncio.sleep(0.1)
 
     def serialize_all_tasks(self) -> list[Dict[str, Any]]:
         """
@@ -1051,7 +984,6 @@ class TaskScheduler:
 # ----------------------
 # Task Serialization Helpers
 # ----------------------
-
 
 def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:
     """
@@ -1082,20 +1014,18 @@ def parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
         # Use the Localization singleton for consistent timezone handling
         return Localization.get().localtime_str_to_utc_dt(dt_str)
     except ValueError as e:
-        raise ValueError(
-            f"Invalid datetime format: {dt_str}. Expected ISO format. Error: {e}"
-        )
+        raise ValueError(f"Invalid datetime format: {dt_str}. Expected ISO format. Error: {e}")
 
 
 def serialize_task_schedule(schedule: TaskSchedule) -> Dict[str, str]:
     """Convert TaskSchedule to a standardized dictionary format."""
     return {
-        "minute": schedule.minute,
-        "hour": schedule.hour,
-        "day": schedule.day,
-        "month": schedule.month,
-        "weekday": schedule.weekday,
-        "timezone": schedule.timezone,
+        'minute': schedule.minute,
+        'hour': schedule.hour,
+        'day': schedule.day,
+        'month': schedule.month,
+        'weekday': schedule.weekday,
+        'timezone': schedule.timezone
     }
 
 
@@ -1103,12 +1033,12 @@ def parse_task_schedule(schedule_data: Dict[str, str]) -> TaskSchedule:
     """Parse dictionary into TaskSchedule with validation."""
     try:
         return TaskSchedule(
-            minute=schedule_data.get("minute", "*"),
-            hour=schedule_data.get("hour", "*"),
-            day=schedule_data.get("day", "*"),
-            month=schedule_data.get("month", "*"),
-            weekday=schedule_data.get("weekday", "*"),
-            timezone=schedule_data.get("timezone", Localization.get().get_timezone()),
+            minute=schedule_data.get('minute', '*'),
+            hour=schedule_data.get('hour', '*'),
+            day=schedule_data.get('day', '*'),
+            month=schedule_data.get('month', '*'),
+            weekday=schedule_data.get('weekday', '*'),
+            timezone=schedule_data.get('timezone', Localization.get().get_timezone())
         )
     except Exception as e:
         raise ValueError(f"Invalid schedule format: {e}") from e
@@ -1117,11 +1047,9 @@ def parse_task_schedule(schedule_data: Dict[str, str]) -> TaskSchedule:
 def serialize_task_plan(plan: TaskPlan) -> Dict[str, Any]:
     """Convert TaskPlan to a standardized dictionary format."""
     return {
-        "todo": [serialize_datetime(dt) for dt in plan.todo],
-        "in_progress": serialize_datetime(plan.in_progress)
-        if plan.in_progress
-        else None,
-        "done": [serialize_datetime(dt) for dt in plan.done],
+        'todo': [serialize_datetime(dt) for dt in plan.todo],
+        'in_progress': serialize_datetime(plan.in_progress) if plan.in_progress else None,
+        'done': [serialize_datetime(dt) for dt in plan.done]
     }
 
 
@@ -1134,7 +1062,7 @@ def parse_task_plan(plan_data: Dict[str, Any]) -> TaskPlan:
 
         # Parse todo items with careful validation
         todo_dates = []
-        for dt_str in plan_data.get("todo", []):
+        for dt_str in plan_data.get('todo', []):
             if dt_str:
                 parsed_dt = parse_datetime(dt_str)
                 if parsed_dt:
@@ -1145,15 +1073,15 @@ def parse_task_plan(plan_data: Dict[str, Any]) -> TaskPlan:
 
         # Parse in_progress with validation
         in_progress = None
-        if plan_data.get("in_progress"):
-            in_progress = parse_datetime(plan_data.get("in_progress"))
+        if plan_data.get('in_progress'):
+            in_progress = parse_datetime(plan_data.get('in_progress'))
             # Ensure datetime is timezone-aware
             if in_progress and in_progress.tzinfo is None:
                 in_progress = in_progress.replace(tzinfo=timezone.utc)
 
         # Parse done items with validation
         done_dates = []
-        for dt_str in plan_data.get("done", []):
+        for dt_str in plan_data.get('done', []):
             if dt_str:
                 parsed_dt = parse_datetime(dt_str)
                 if parsed_dt:
@@ -1171,22 +1099,22 @@ def parse_task_plan(plan_data: Dict[str, Any]) -> TaskPlan:
         done_dates_cast: list[datetime] = cast(list[datetime], done_dates)
 
         return TaskPlan.create(
-            todo=todo_dates_cast, in_progress=in_progress, done=done_dates_cast
+            todo=todo_dates_cast,
+            in_progress=in_progress,
+            done=done_dates_cast
         )
     except Exception as e:
-        PrintStyle(italic=True, font_color="red", padding=False).print(
+        PrintStyle.error(
             f"Error parsing task plan: {e}"
         )
         # Return empty plan instead of failing
         return TaskPlan(todo=[], in_progress=None, done=[])
 
 
-T = TypeVar("T", bound=Union[ScheduledTask, AdHocTask, PlannedTask])
+T = TypeVar('T', bound=Union[ScheduledTask, AdHocTask, PlannedTask])
 
 
-def serialize_task(
-    task: Union[ScheduledTask, AdHocTask, PlannedTask],
-) -> Dict[str, Any]:
+def serialize_task(task: Union[ScheduledTask, AdHocTask, PlannedTask]) -> Dict[str, Any]:
     """
     Standardized serialization for task objects with proper handling of all complex types.
     """
@@ -1215,61 +1143,53 @@ def serialize_task(
 
     # Add type-specific fields
     if isinstance(task, ScheduledTask):
-        task_dict["type"] = "scheduled"
-        task_dict["schedule"] = serialize_task_schedule(task.schedule)  # type: ignore
+        task_dict['type'] = 'scheduled'
+        task_dict['schedule'] = serialize_task_schedule(task.schedule)  # type: ignore
     elif isinstance(task, AdHocTask):
-        task_dict["type"] = "adhoc"
+        task_dict['type'] = 'adhoc'
         adhoc_task = cast(AdHocTask, task)
-        task_dict["token"] = adhoc_task.token
+        task_dict['token'] = adhoc_task.token
     else:
-        task_dict["type"] = "planned"
+        task_dict['type'] = 'planned'
         planned_task = cast(PlannedTask, task)
-        task_dict["plan"] = serialize_task_plan(planned_task.plan)  # type: ignore
+        task_dict['plan'] = serialize_task_plan(planned_task.plan)  # type: ignore
 
     return task_dict
 
 
-def serialize_tasks(
-    tasks: list[Union[ScheduledTask, AdHocTask, PlannedTask]],
-) -> list[Dict[str, Any]]:
+def serialize_tasks(tasks: list[Union[ScheduledTask, AdHocTask, PlannedTask]]) -> list[Dict[str, Any]]:
     """
     Serialize a list of tasks to a list of dictionaries.
     """
     return [serialize_task(task) for task in tasks]
 
 
-def deserialize_task(
-    task_data: Dict[str, Any], task_class: Optional[Type[T]] = None
-) -> T:
+def deserialize_task(task_data: Dict[str, Any], task_class: Optional[Type[T]] = None) -> T:
     """
     Deserialize dictionary into appropriate task object with validation.
     If task_class is provided, uses that type. Otherwise determines type from data.
     """
-    task_type_str = task_data.get("type", "")
+    task_type_str = task_data.get('type', '')
     determined_class = None
 
     if not task_class:
         # Determine task class from data
-        if task_type_str == "scheduled":
+        if task_type_str == 'scheduled':
             determined_class = cast(Type[T], ScheduledTask)
-        elif task_type_str == "adhoc":
+        elif task_type_str == 'adhoc':
             determined_class = cast(Type[T], AdHocTask)
             # Ensure token is a valid non-empty string
-            if not task_data.get("token"):
-                task_data["token"] = str(
-                    random.randint(1000000000000000000, 9999999999999999999)
-                )
-        elif task_type_str == "planned":
+            if not task_data.get('token'):
+                task_data['token'] = str(random.randint(1000000000000000000, 9999999999999999999))
+        elif task_type_str == 'planned':
             determined_class = cast(Type[T], PlannedTask)
         else:
             raise ValueError(f"Unknown task type: {task_type_str}")
     else:
         determined_class = task_class
         # If this is an AdHocTask, ensure token is valid
-        if determined_class == AdHocTask and not task_data.get("token"):  # type: ignore
-            task_data["token"] = str(
-                random.randint(1000000000000000000, 9999999999999999999)
-            )
+        if determined_class == AdHocTask and not task_data.get('token'):  # type: ignore
+            task_data['token'] = str(random.randint(1000000000000000000, 9999999999999999999))
 
     common_args = {
         "uuid": task_data.get("uuid"),

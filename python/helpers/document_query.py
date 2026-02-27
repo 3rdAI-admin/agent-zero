@@ -357,6 +357,7 @@ class DocumentQueryHelper:
         self.agent = agent
         self.store = DocumentQueryStore.get(agent)
         self.progress_callback = progress_callback or (lambda x: None)
+        self.store_lock = asyncio.Lock()
 
     async def document_qa(
         self, document_uris: List[str], questions: Sequence[str]
@@ -430,7 +431,8 @@ class DocumentQueryHelper:
             messages=[
                 SystemMessage(content=qa_system_message),
                 HumanMessage(content=qa_user_message),
-            ]
+            ],
+            explicit_caching=False,
         )
 
         self.progress_callback("Q&A process completed")
@@ -525,9 +527,10 @@ class DocumentQueryHelper:
             if add_to_db:
                 self.progress_callback("Indexing document")
                 await self.agent.handle_intervention()
-                success, ids = await self.store.add_document(
-                    document_content, document_uri_norm
-                )
+                async with self.store_lock:
+                    success, ids = await self.store.add_document(
+                        document_content, document_uri_norm
+                    )
                 if not success:
                     self.progress_callback("Failed to index document")
                     raise ValueError(
