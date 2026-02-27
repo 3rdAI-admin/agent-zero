@@ -169,7 +169,9 @@ def _serialize_agent(agent: Agent):
 def _serialize_log(log: Log):
     # Guard against concurrent log mutations while serializing.
     with log._lock:
-        logs = [item.output() for item in log.logs[-LOG_SIZE:]]  # serialize LogItem objects
+        logs = [
+            item.output() for item in log.logs[-LOG_SIZE:]
+        ]  # serialize LogItem objects
         guid = log.guid
         progress = log.progress
         progress_no = log.progress_no

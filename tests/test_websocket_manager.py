@@ -12,7 +12,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from python.helpers.websocket import ConnectionNotFoundError, WebSocketHandler, WebSocketResult
+from python.helpers.websocket import (
+    ConnectionNotFoundError,
+    WebSocketHandler,
+    WebSocketResult,
+)
 from python.helpers.websocket_manager import (
     WebSocketManager,
     BUFFER_TTL,
@@ -484,6 +488,7 @@ async def test_timestamps_are_timezone_aware():
         await manager.route_event(NAMESPACE, "unknown", {}, "sid-utc")
         assert info.last_activity.tzinfo is not None
 
+
 class DuplicateHandler(WebSocketHandler):
     @classmethod
     def get_event_types(cls) -> list[str]:
@@ -566,7 +571,9 @@ class ResultHandler(WebSocketHandler):
 
     async def process_event(self, event_type: str, data: dict[str, Any], sid: str):
         if event_type == "result_event":
-            return WebSocketResult.ok({"sid": sid}, correlation_id="explicit", duration_ms=1.234)
+            return WebSocketResult.ok(
+                {"sid": sid}, correlation_id="explicit", duration_ms=1.234
+            )
         return WebSocketResult.error(
             code="E_RESULT",
             message="boom",
@@ -721,7 +728,9 @@ async def test_route_event_all_respects_exclude_handlers():
     for entry in aggregated:
         assert entry["correlationId"]
         assert entry["results"]
-        assert all(result["handlerId"] == alpha.identifier for result in entry["results"])
+        assert all(
+            result["handlerId"] == alpha.identifier for result in entry["results"]
+        )
 
 
 @pytest.mark.asyncio
@@ -804,13 +813,19 @@ def test_debug_logging_respects_runtime_flag(monkeypatch):
     def capture(message: str) -> None:
         logs.append(message)
 
-    monkeypatch.setattr("python.helpers.print_style.PrintStyle.debug", staticmethod(capture))
-    monkeypatch.setattr("python.helpers.websocket_manager.runtime.is_development", lambda: False)
+    monkeypatch.setattr(
+        "python.helpers.print_style.PrintStyle.debug", staticmethod(capture)
+    )
+    monkeypatch.setattr(
+        "python.helpers.websocket_manager.runtime.is_development", lambda: False
+    )
 
     manager._debug("should-not-log")  # noqa: SLF001
     assert logs == []
 
-    monkeypatch.setattr("python.helpers.websocket_manager.runtime.is_development", lambda: True)
+    monkeypatch.setattr(
+        "python.helpers.websocket_manager.runtime.is_development", lambda: True
+    )
     manager._debug("should-log")  # noqa: SLF001
     assert logs == ["should-log"]
 

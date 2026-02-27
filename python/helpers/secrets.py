@@ -1,3 +1,4 @@
+import os
 import re
 import threading
 from io import StringIO
@@ -183,6 +184,13 @@ class SecretsManager:
             merged_secrets = (
                 self.parse_env_content(combined_raw) if combined_raw else {}
             )
+
+            # Fallback: EMAIL_* from environment (e.g. repo .env) so they persist and work without writing to secrets file
+            for key in ("EMAIL_USER", "EMAIL_PASSWORD"):
+                if key not in merged_secrets:
+                    val = os.environ.get(key)
+                    if val:
+                        merged_secrets[key] = val
 
             # Only track the first file's raw text for single-file setups
             if len(self._files) != 1:

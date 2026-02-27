@@ -1,21 +1,21 @@
 from abc import abstractmethod
 import asyncio
-from collections import OrderedDict
 from collections.abc import Mapping
 import json
 import math
-from typing import Coroutine, Literal, TypedDict, cast, Union, Dict, List, Any
-from python.helpers import messages, tokens, settings, call_llm
-from enum import Enum
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from typing import TypedDict, cast, Union, Dict, List
+from python.helpers import messages, tokens, settings
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 BULK_MERGE_COUNT = 3
 TOPICS_MERGE_COUNT = 3
 CURRENT_TOPIC_RATIO = 0.5
 HISTORY_TOPIC_RATIO = 0.3
 HISTORY_BULK_RATIO = 0.2
-CURRENT_TOPIC_ATTENTION_COMPRESSION = 0.65 # compress current topic's attention window to 65% of size
-HISTORY_TOPIC_ATTENTION_COMPRESSION = 0 # compress history topic's attention window to 0% of size - only request and response remain intact
+CURRENT_TOPIC_ATTENTION_COMPRESSION = (
+    0.65  # compress current topic's attention window to 65% of size
+)
+HISTORY_TOPIC_ATTENTION_COMPRESSION = 0  # compress history topic's attention window to 0% of size - only request and response remain intact
 LARGE_MESSAGE_TO_CURRENT_TOPIC_RATIO = 0.5
 LARGE_MESSAGE_TO_HISTORY_TOPIC_RATIO = 0.2
 RAW_MESSAGE_OUTPUT_TEXT_TRIM = 100
@@ -158,12 +158,14 @@ class Topic(Record):
         self.summary = await self.summarize_messages(self.messages)
         return self.summary
 
-    def compress_large_messages(self, message_ratio: float = CURRENT_TOPIC_RATIO * LARGE_MESSAGE_TO_CURRENT_TOPIC_RATIO) -> bool:
+    def compress_large_messages(
+        self,
+        message_ratio: float = CURRENT_TOPIC_RATIO
+        * LARGE_MESSAGE_TO_CURRENT_TOPIC_RATIO,
+    ) -> bool:
         set = settings.get_settings()
         msg_max_size = (
-            set["chat_model_ctx_length"]
-            * set["chat_model_ctx_history"]
-            * message_ratio
+            set["chat_model_ctx_length"] * set["chat_model_ctx_history"] * message_ratio
         )
         large_msgs = []
         for m in (m for m in self.messages if not m.summary):
@@ -202,8 +204,9 @@ class Topic(Record):
             compress = await self.compress_attention()
         return compress
 
-    async def compress_attention(self, ratio: float = CURRENT_TOPIC_ATTENTION_COMPRESSION) -> bool:
-
+    async def compress_attention(
+        self, ratio: float = CURRENT_TOPIC_ATTENTION_COMPRESSION
+    ) -> bool:
         middle = len(self.messages) - 2
         if middle < 2:
             return False
@@ -290,7 +293,7 @@ class Bulk(Record):
     def from_dict(data: dict, history: "History"):
         bulk = Bulk(history=history)
         bulk.summary = data["summary"]
-        cls = data["_cls"]
+        _ = data["_cls"]  # reserved for future use
         bulk.records = [Record.from_dict(r, history=history) for r in data["records"]]
         return bulk
 
@@ -417,10 +420,11 @@ class History(Record):
         return compressed
 
     async def compress_topics(self) -> bool:
-
         # 1. first identify large messages and compress them cheaply
         for topic in self.topics:
-            if topic.compress_large_messages(HISTORY_TOPIC_RATIO*LARGE_MESSAGE_TO_HISTORY_TOPIC_RATIO):
+            if topic.compress_large_messages(
+                HISTORY_TOPIC_RATIO * LARGE_MESSAGE_TO_HISTORY_TOPIC_RATIO
+            ):
                 return True
 
         # 2. summarize topics attention window one by one
@@ -484,24 +488,24 @@ def _get_ctx_size_for_history() -> int:
 
 
 def _stringify_output(output: OutputMessage, ai_label="ai", human_label="human"):
-    return f'{ai_label if output["ai"] else human_label}: {_stringify_content(output["content"])}'
+    return f"{ai_label if output['ai'] else human_label}: {_stringify_content(output['content'])}"
 
 
 def _stringify_content(content: MessageContent) -> str:
     # already a string
     if isinstance(content, str):
         return content
-    
+
     # raw messages return preview or trimmed json
     if _is_raw_message(content):
-        preview: str = content.get("preview", "") # type: ignore
+        preview: str = content.get("preview", "")  # type: ignore
         if preview:
             return preview
         text = _json_dumps(content)
         if len(text) > RAW_MESSAGE_OUTPUT_TEXT_TRIM:
             return text[:RAW_MESSAGE_OUTPUT_TEXT_TRIM] + "... TRIMMED"
         return text
-    
+
     # regular messages of non-string are dumped as json
     return _json_dumps(content)
 
@@ -535,7 +539,9 @@ def group_messages_abab(messages: list[BaseMessage]) -> list[BaseMessage]:
     for msg in messages:
         if result and isinstance(result[-1], type(msg)):
             # create new instance of the same type with merged content
-            result[-1] = type(result[-1])(content=_merge_outputs(result[-1].content, msg.content))  # type: ignore
+            result[-1] = type(result[-1])(
+                content=_merge_outputs(result[-1].content, msg.content)
+            )  # type: ignore
         else:
             result.append(msg)
     return result
@@ -546,7 +552,7 @@ def output_langchain(messages: list[OutputMessage]):
     for m in messages:
         content = _output_content_langchain(content=m["content"])
         if not content or (isinstance(content, str) and not content.strip()):
-            continue # skip empty messages, models 
+            continue  # skip empty messages, models
         if m["ai"]:
             result.append(AIMessage(content))  # type: ignore
         else:

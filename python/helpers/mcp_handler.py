@@ -629,6 +629,7 @@ class MCPConfig(BaseModel):
 
         # Initialize all servers in parallel (fetch tools concurrently)
         if self.servers:
+
             async def _init_server(server):
                 try:
                     await server.initialize()

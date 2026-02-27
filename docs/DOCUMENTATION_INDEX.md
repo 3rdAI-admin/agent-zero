@@ -12,6 +12,7 @@
 - **[Installation Guide](./installation.md)** - Basic installation instructions (upstream Docker image)
 - **[Native Installation](./NATIVE_INSTALLATION.md)** - Installation without Docker (native Kali, port 8000)
 - **[Complete Setup Guide](./COMPLETE_SETUP_GUIDE.md)** - Full feature setup (VNC, Claude Code, Security)
+- **[Google Account & Gmail Setup](./setup/GOOGLE_ACCOUNT_SETUP.md)** - Google Gemini API key and Gmail (email) credentials; persistence of settings
 
 ### Features & Integration
 - **[VNC Desktop Access](./VNC_ACCESS.md)** - GUI environment setup and usage

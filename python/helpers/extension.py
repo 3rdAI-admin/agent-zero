@@ -14,7 +14,6 @@ _cache: dict[str, list[type["Extension"]]] = {}
 
 
 class Extension:
-
     def __init__(self, agent: "Agent|None", **kwargs):
         self.agent: "Agent" = agent  # type: ignore < here we ignore the type check as there are currently no extensions without an agent
         self.kwargs = kwargs
@@ -27,10 +26,12 @@ class Extension:
 async def call_extensions(
     extension_point: str, agent: "Agent|None" = None, **kwargs
 ) -> Any:
-    from python.helpers import projects, subagents
+    from python.helpers import subagents
 
     # search for extension folders in all agent's paths
-    paths = subagents.get_paths(agent, "extensions", extension_point, default_root="python")
+    paths = subagents.get_paths(
+        agent, "extensions", extension_point, default_root="python"
+    )
     all_exts = [cls for path in paths for cls in _get_extensions(path)]
 
     # merge: first ocurrence of file name is the override

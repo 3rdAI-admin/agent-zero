@@ -31,7 +31,7 @@ class SystemPrompt(Extension):
             system_prompt.append(secrets_prompt)
         if project_prompt:
             system_prompt.append(project_prompt)
-       
+
 
 def get_main_prompt(agent: Agent):
     return agent.read_prompt("agent.system.main.md")
@@ -82,6 +82,7 @@ def get_project_prompt(agent: Agent):
     else:
         result += "\n\n" + agent.read_prompt("agent.system.projects.inactive.md")
     return result
+
 
 def get_skills_prompt(agent: Agent):
     available = skills.list_skills(agent=agent)

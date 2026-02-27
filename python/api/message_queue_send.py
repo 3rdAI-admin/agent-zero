@@ -3,6 +3,7 @@ from python.helpers import message_queue as mq
 from agent import AgentContext
 from python.helpers.state_monitor_integration import mark_dirty_for_context
 
+
 class MessageQueueSend(ApiHandler):
     """Send queued message(s) immediately."""
 

@@ -24,7 +24,9 @@ class FakeSocketIOServer:
 
 
 @pytest.mark.asyncio
-async def test_state_sync_handshake_and_initial_snapshot_work_with_no_selected_context() -> None:
+async def test_state_sync_handshake_and_initial_snapshot_work_with_no_selected_context() -> (
+    None
+):
     """
     Regression for Welcome screen: the UI has no selected context, so `state_request.context`
     is null. We must still handshake and receive an initial `state_push` quickly (no hang).

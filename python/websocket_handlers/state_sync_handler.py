@@ -27,7 +27,9 @@ class StateSyncHandler(WebSocketHandler):
         if _ws_debug_enabled():
             PrintStyle.debug(f"[StateSyncHandler] disconnect sid={sid}")
 
-    async def process_event(self, event_type: str, data: dict, sid: str) -> dict | WebSocketResult | None:
+    async def process_event(
+        self, event_type: str, data: dict, sid: str
+    ) -> dict | WebSocketResult | None:
         correlation_id = data.get("correlationId")
         try:
             request = parse_state_request_payload(data)
@@ -65,7 +67,9 @@ class StateSyncHandler(WebSocketHandler):
             reason="state_sync_handler.StateSyncHandler.state_request",
         )
         if _ws_debug_enabled():
-            PrintStyle.debug(f"[StateSyncHandler] state_request accepted sid={sid} seq_base={seq_base}")
+            PrintStyle.debug(
+                f"[StateSyncHandler] state_request accepted sid={sid} seq_base={seq_base}"
+            )
 
         return self.result_ok(
             {

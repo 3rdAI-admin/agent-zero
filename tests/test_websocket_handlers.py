@@ -41,10 +41,13 @@ def test_websocket_result_ok_clones_payload():
     payload = {"value": 1}
     result = WebSocketResult.ok(payload)
 
-    assert result.as_result(
-        handler_id="handler",
-        fallback_correlation_id="corr",
-    )["data"] == payload
+    assert (
+        result.as_result(
+            handler_id="handler",
+            fallback_correlation_id="corr",
+        )["data"]
+        == payload
+    )
 
     payload["value"] = 2
     assert result.as_result(

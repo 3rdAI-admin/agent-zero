@@ -33,7 +33,17 @@ class ImageGet(ApiHandler):
         filename = os.path.basename(path)
 
         # list of allowed image extensions
-        image_extensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico", ".svgz"]
+        image_extensions = [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".webp",
+            ".svg",
+            ".ico",
+            ".svgz",
+        ]
 
         # # If metadata is requested, return file information
         # if metadata:

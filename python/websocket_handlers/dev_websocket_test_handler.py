@@ -74,9 +74,7 @@ class DevWebsocketTestHandler(WebSocketHandler):
         if event_type == "ws_tester_request_delayed":
             delay_ms = int(data.get("delay_ms", 0))
             await asyncio.sleep(delay_ms / 1000)
-            PrintStyle.warning(
-                "Harness delayed request finished after %s ms", delay_ms
-            )
+            PrintStyle.warning("Harness delayed request finished after %s ms", delay_ms)
             return self.result_ok(
                 {
                     "status": "delayed",

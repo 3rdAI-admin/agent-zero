@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import List
 
 from python.helpers.tool import Tool, Response
-from python.helpers import projects, files, file_tree
-from python.helpers import skills as skills_helper, runtime
+from python.helpers import skills as skills_helper
 
 
 DATA_NAME_LOADED_SKILLS = "loaded_skills"
@@ -129,10 +127,10 @@ class SkillsTool(Tool):
         if skill.name in loaded:
             loaded.remove(skill.name)
         loaded.append(skill.name)
-        self.agent.data[DATA_NAME_LOADED_SKILLS] = loaded[-max_loaded_skills():]
+        self.agent.data[DATA_NAME_LOADED_SKILLS] = loaded[-max_loaded_skills() :]
 
         return f"Loaded skill '{skill.name}' into EXTRAS."
 
 
 def max_loaded_skills() -> int:
-    return 5 # TODO move to settings
+    return 5  # TODO move to settings

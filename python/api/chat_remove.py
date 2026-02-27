@@ -27,6 +27,7 @@ class RemoveChat(ApiHandler):
 
         # Context removal affects global chat/task lists in all tabs.
         from python.helpers.state_monitor_integration import mark_dirty_all
+
         mark_dirty_all(reason="api.chat_remove.RemoveChat")
 
         return {

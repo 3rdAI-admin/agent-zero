@@ -14,7 +14,12 @@ def error_text(e: Exception):
     return str(e)
 
 
-def format_error(e: Exception, start_entries=20, end_entries=15, error_message_position:Literal["top", "bottom", "none"] = "top"):
+def format_error(
+    e: Exception,
+    start_entries=20,
+    end_entries=15,
+    error_message_position: Literal["top", "bottom", "none"] = "top",
+):
     # format traceback from the provided exception instead of the most recent one
     traceback_text = "".join(traceback.format_exception(type(e), e, e.__traceback__))
     # Split the traceback into lines

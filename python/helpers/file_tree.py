@@ -259,7 +259,7 @@ def file_tree(
         return root_item
 
     if output_mode == OUTPUT_MODE_STRING:
-        display_name = output_root #relative_path.strip() or root_name
+        display_name = output_root  # relative_path.strip() or root_name
         root_line = f"{display_name.rstrip(os.sep)}/"
         lines = [root_line]
         for node in iter_visible():

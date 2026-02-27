@@ -242,11 +242,7 @@ def is_probably_binary_bytes(data: bytes, threshold: float = 0.3) -> bool:
 
     # Count suspicious control bytes
     allowed = {8, 9, 10, 12, 13}  # \b \t \n \f \r
-    suspicious = sum(
-        1
-        for b in data
-        if ((b < 32 and b not in allowed) or b == 127)
-    )
+    suspicious = sum(1 for b in data if ((b < 32 and b not in allowed) or b == 127))
     return (suspicious / len(data)) > threshold
 
 
@@ -348,7 +344,11 @@ def find_file_in_dirs(_filename: str, _directories: list[str]):
     )
 
 
-def get_unique_filenames_in_dirs(dir_paths: list[str], pattern: str = "*", type: Literal["file", "dir", "any"] = "file"):
+def get_unique_filenames_in_dirs(
+    dir_paths: list[str],
+    pattern: str = "*",
+    type: Literal["file", "dir", "any"] = "file",
+):
     # returns absolute paths for unique filenames, priority by order in dir_paths
     seen = set()
     result = []
@@ -356,7 +356,11 @@ def get_unique_filenames_in_dirs(dir_paths: list[str], pattern: str = "*", type:
         full_dir = get_abs_path(dir_path)
         for file_path in glob.glob(os.path.join(full_dir, pattern)):
             fname = os.path.basename(file_path)
-            if fname not in seen and (type == "any" or (type == "file" and os.path.isfile(file_path)) or (type == "dir" and os.path.isdir(file_path))):
+            if fname not in seen and (
+                type == "any"
+                or (type == "file" and os.path.isfile(file_path))
+                or (type == "dir" and os.path.isdir(file_path))
+            ):
                 seen.add(fname)
                 result.append(get_abs_path(file_path))
     # sort by filename (basename), not the full path
@@ -452,10 +456,10 @@ def move_dir(old_path: str, new_path: str):
     abs_new = get_abs_path(new_path)
     if not os.path.isdir(abs_old):
         return  # nothing to rename
-    
+
     # ensure parent directory exists
     os.makedirs(os.path.dirname(abs_new), exist_ok=True)
-    
+
     try:
         os.rename(abs_old, abs_new)
     except Exception:
@@ -505,13 +509,16 @@ def get_abs_path(*relative_paths):
     "Convert relative paths to absolute paths based on the base directory."
     return os.path.join(get_base_dir(), *relative_paths)
 
+
 def get_abs_path_dockerized(*relative_paths):
     "Ensures the abs path is dockerized (i.e. /a0/... path)"
     abs = get_abs_path(*relative_paths)
     from python.helpers import runtime
+
     if runtime.is_dockerized():
         return abs
     return normalize_a0_path(abs)
+
 
 def get_abs_path_development(*relative_paths):
     "Ensures the abs path is relevant for dev environment"
@@ -564,10 +571,10 @@ def dirname(path: str):
 
 
 def is_in_base_dir(path: str):
-    return is_in_dir(path,get_base_dir())
+    return is_in_dir(path, get_base_dir())
 
 
-def is_in_dir(path:str,dir:str):
+def is_in_dir(path: str, dir: str):
     # check if the given path is within the directory
     abs_path = os.path.abspath(path)
     abs_dir = os.path.abspath(dir)
@@ -617,6 +624,7 @@ def move_file(relative_path: str, new_path: str):
     except OSError:
         # fallback to copy and delete
         import shutil
+
         shutil.copy2(abs_path, new_abs_path)
         try:
             os.unlink(abs_path)
