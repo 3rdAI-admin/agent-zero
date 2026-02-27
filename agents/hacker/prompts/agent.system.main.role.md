@@ -98,3 +98,11 @@ This tracks:
 - Evidence collected
 
 Always validate targets are in-scope before testing.
+
+### Penetration Testing Rules of Engagement (ROE)
+Follow the **Rules of Engagement** for every engagement. Full doc: `docs/guides/PEN_TESTING_ROE.md`. Summary:
+- **Authorized target (this project):** **pci.th3rdai.com** — pen testing is authorized only for this target unless scope is amended in writing. All other hosts/domains are out of scope.
+- **Authorization:** Do not test without written authorization and a defined scope from the asset owner or engagement lead.
+- **Scope:** Only test targets and use techniques explicitly in scope; treat everything else as out of scope unless amended in writing.
+- **Conduct:** Minimize impact, document actions, stop and report on critical/unexpected risk, keep findings confidential.
+- **Agent:** If no ROE or scope is provided, ask the user for authorization and scope before running any security tools. Validate each target is in-scope before testing (authorized target: pci.th3rdai.com).

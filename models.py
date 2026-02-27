@@ -16,6 +16,7 @@ from typing import (
 
 from litellm import completion, acompletion, embedding
 import litellm
+from litellm.exceptions import AuthenticationError as LiteLLMAuthError
 import openai
 from litellm.types.utils import ModelResponse
 
@@ -206,6 +207,8 @@ def get_api_key(service: str) -> str:
         or dotenv.get_dotenv_value(f"{service.upper()}_API_TOKEN")
         or "None"
     )
+    if key and key != "None":
+        key = key.strip()
     # if the key contains a comma, use round-robin
     if "," in key:
         api_keys = [k.strip() for k in key.split(",") if k.strip()]
@@ -569,6 +572,23 @@ class LiteLLMChatWrapper(SimpleChatModel):
             except Exception as e:
                 import asyncio
 
+                # 401: give a clear hint for Venice / Agent Zero API
+                if isinstance(e, LiteLLMAuthError):
+                    _provider = getattr(
+                        self, "a0_model_conf", None
+                    ) and getattr(self.a0_model_conf, "provider", "")
+                    if _provider in ("venice", "a0_venice"):
+                        msg = (
+                            str(e)
+                            + " Check that the API key is set for the correct provider: "
+                            "Venice.ai needs a key from venice.ai; Agent Zero API needs a key from the agent-zero.ai dashboard (sk-a0-...). "
+                            "In Settings → API Keys, set the key for the same provider you chose for Chat/Utility/Browser."
+                        )
+                        raise LiteLLMAuthError(
+                            msg,
+                            llm_provider=_provider or "openai",
+                            model=getattr(self, "model_name", "") or "",
+                        ) from e
                 # Retry only if no chunks received and error is transient
                 if got_any_chunk or not _is_transient_litellm_error(e) or attempt >= max_retries:
                     raise
@@ -921,6 +941,20 @@ def _merge_provider_defaults(
         key = get_api_key(original_provider)
         if key and key not in ("None", "NA"):
             kwargs["api_key"] = key
+
+    # Fail fast for Venice / Agent Zero API if key is missing (avoid 401)
+    if original_provider.lower() in ("venice", "a0_venice"):
+        key = kwargs.get("api_key") or get_api_key(original_provider)
+        if not key or key in ("None", "NA") or (key and len(key.strip()) < 10):
+            env_var = "API_KEY_VENICE" if original_provider.lower() == "venice" else "API_KEY_A0_VENICE"
+            msg = (
+                f"No valid API key for {original_provider}. Set it in Settings → External Services → API Keys "
+                f"(for the provider 'Venice.ai' or 'Agent Zero API'), or in .env as {env_var}=your_key. "
+                "Venice.ai needs a key from venice.ai; Agent Zero API needs a key from the agent-zero.ai dashboard (sk-a0-...)."
+            )
+            raise LiteLLMAuthError(
+                msg, llm_provider=original_provider, model=""
+            )
 
     # Merge LiteLLM global kwargs (timeouts, stream_timeout, etc.)
     try:

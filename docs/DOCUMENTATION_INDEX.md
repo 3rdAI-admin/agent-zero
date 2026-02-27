@@ -47,6 +47,7 @@
 
 ### Security Tools
 - **[Security Setup](./guides/SECURITY_SETUP.md)** - Security tools installation
+- **[Penetration Testing ROE](./guides/PEN_TESTING_ROE.md)** - Rules of engagement for pen testing (Agent Zero + Archon)
 - **[Quick Start Security](./guides/QUICK_START_SECURITY.md)** - Security testing quick start
 - **[Burp Suite Integration](./integration/BURP_SUITE_INTEGRATION.md)** - Burp Suite DAST testing (ARM64)
 
@@ -63,6 +64,7 @@
 - **Access the desktop**: [VNC Access Guide](./VNC_ACCESS.md)
 - **Use Claude Code**: [Claude Code Integration](./CLAUDE_CODE_INTEGRATION.md)
 - **Run security scans**: [Security Setup](./guides/SECURITY_SETUP.md)
+- **Follow pen test ROE (Agent Zero / Archon)**: [Penetration Testing ROE](./guides/PEN_TESTING_ROE.md)
 - **Connect remotely (API/MCP/A2A)**: [Connectivity](./connectivity.md)
 - **Integrate ZeroClaw with Agent Zero**: [Agent Zero for ZeroClaw Integrators](./AGENT_ZERO_FOR_ZEROCLAW_INTEGRATORS.md)
 - **MCP in Cursor (HTTP/HTTPS, cert fix)**: [MCP Cursor Remediation](./MCP_CURSOR_REMEDIATION.md) · [MCP Client Connection](./MCP_CLIENT_CONNECTION.md)

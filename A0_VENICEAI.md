@@ -5,6 +5,20 @@
 
 ---
 
+## Default configuration (this repo)
+
+Agent Zero is configured to use **Venice.ai** by default for Chat, Utility, and Browser:
+
+| Role    | Provider  | Default model     |
+|---------|-----------|-------------------|
+| Chat    | Venice.ai | `mistral-31-24b`  |
+| Utility | Venice.ai | `qwen3-4b`       |
+| Browser | Venice.ai | `mistral-31-24b`  |
+
+You only need to add your **API key** (see below). To restore these defaults via env, use `conf/venice-defaults.env.example`.
+
+---
+
 ## Overview
 
 A0T token holders can use **free Venice.ai API credits** to run Agent Zero. Credits are tied to staking; the dashboard shows wallet info, remaining quota, and an LLM API key to use with the **Agent Zero Venice.ai** model provider in Agent Zero.
@@ -74,6 +88,8 @@ You can set the key either in the **API keys** section of the Settings UI (under
 API_KEY_A0_VENICE=sk-a0-your-key-here
 ```
 
+**Where the app reads the key:** The app loads two `.env` files (in order): the repo/root `.env` (e.g. project root or `/a0/.env` in Docker), then `usr/.env` (Settings-page saves; in Docker this is the `A0_volume` mount). Use **exactly** `API_KEY_VENICE` for Venice.ai or `API_KEY_A0_VENICE` for Agent Zero API. Restart the container after editing `.env` so the process picks up the change.
+
 ---
 
 ## Dashboard sections (reference)
@@ -91,3 +107,53 @@ API_KEY_A0_VENICE=sk-a0-your-key-here
 - **Venice.ai** (`venice`): Uses `https://api.venice.ai/api/v1` and your own Venice.ai API key. Different provider in the dropdown.
 
 Use **Agent Zero Venice.ai** when following the dashboard “How to use” steps and when using the key from the LLM API key card.
+
+---
+
+## Troubleshooting: “Venice not working”
+
+If you switched from Claude to Venice and chat/utility/browser don’t respond or show errors, check the following.
+
+### 1. **Provider and API key must match**
+
+| If you selected this in Settings | You must set the API key here | Env var (if using `.env`) |
+|----------------------------------|------------------------------|---------------------------|
+| **Venice.ai** (your own Venice account) | Settings → API Keys → **Venice.ai** | `API_KEY_VENICE=` (get key from [venice.ai](https://venice.ai)) |
+| **Agent Zero API** (staking credits) | Settings → API Keys → **Agent Zero API** | `API_KEY_A0_VENICE=` (key from [agent-zero.ai](https://agent-zero.ai) dashboard, `sk-a0-...`) |
+
+- You cannot use an Agent Zero dashboard key (`sk-a0-...`) with the **Venice.ai** provider, or a Venice.ai key with **Agent Zero API**.
+- If you see a banner **“Missing LLM API Key for current settings”**, the key for your *selected* provider is missing. Add it under that provider’s name in Settings → External Services → API Keys (or in `.env` as above).
+
+### 2. **Where the key is read from**
+
+- **Settings UI:** Keys you save in Settings → API Keys are stored in the app’s env file (e.g. `usr/.env` in the container). No need to edit `.env` if you set it in the UI.
+- **Docker with repo `.env`:** If you use `env_file: .env` in docker-compose, variables from the repo’s `.env` are injected into the container. Use `API_KEY_VENICE=...` for **Venice.ai** or `API_KEY_A0_VENICE=...` for **Agent Zero API**. Restart the container after changing `.env`.
+
+### 3. **Set all three roles (Chat, Utility, Browser)**
+
+In Settings, set **provider and model** for:
+
+- **Chat model** → e.g. Venice.ai (or Agent Zero API) + a model (e.g. `mistral-31-24b` or `qwen3-4b`).
+- **Utility model** → Same provider, smaller model (e.g. `qwen3-4b`) to save quota.
+- **Browser model** → Same provider, a model that supports **vision + function calling** (e.g. `mistral-31-24b`).
+
+If any role still points at Anthropic/Claude, that role will use Claude and can fail or cost money. Switch each role to Venice (or Agent Zero API) and a valid model.
+
+### 4. **Model ID**
+
+Use a **model ID that appears in the dropdown** for your provider. If you type a custom ID, it must be a valid Venice model (see [Venice text models](https://docs.venice.ai/models/text)). Wrong or deprecated IDs can cause 404 or “model not found” errors.
+
+### 5. **Quick checklist**
+
+- [ ] Settings → Chat/Utility/Browser **provider** is **Venice.ai** or **Agent Zero API** (not Anthropic).
+- [ ] Settings → API Keys has a key for **that same provider** (Venice.ai **or** Agent Zero API).
+- [ ] No “Missing LLM API Key” banner (or it’s gone after adding the key).
+- [ ] After changing provider or key, try a simple chat again; restart the app/container if you edited `.env` on the host.
+
+### 6. **"Settings not working" (Agent Zero API)**
+
+If you've set the provider and key but chat/utility/browser still fail:
+
+- **Apply preset and restart:** Run `./MODELS.sh agent-zero` (or inside the container: `docker exec agent-zero /a0/MODELS.sh agent-zero`), then restart the app/container. That sets Chat/Utility/Browser to Agent Zero API and `https://llm.agent-zero.ai/v1`.
+- **Docker and `.env`:** The app loads root `.env` then `usr/.env`. In Docker, root is often `/a0`; if your repo `.env` isn't mounted there, the container won't see it. Either mount the repo (or a file) so `/a0/.env` exists, or save the key in **Settings → API Keys** so it's stored in `usr/.env` (the volume the app uses).
+- **Restart after editing `.env`:** Env vars are read at process start and when settings are loaded. Restart the container after changing `.env` so the new key is picked up.

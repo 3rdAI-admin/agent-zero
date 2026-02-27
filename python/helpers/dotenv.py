@@ -12,6 +12,11 @@ KEY_ROOT_PASSWORD = "ROOT_PASSWORD"
 
 
 def load_dotenv():
+    # Load repo/root .env first (e.g. /a0/.env in Docker, or repo .env on host)
+    root_env = get_abs_path(".env")
+    if os.path.isfile(root_env):
+        _load_dotenv(root_env, override=False)
+    # Then load usr/.env so Settings-page saves and volume env win (override=True)
     _load_dotenv(get_dotenv_file_path(), override=True)
 
 

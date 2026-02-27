@@ -52,6 +52,9 @@ Agent Zero is a personal, organic agentic AI framework that runs in Docker. This
 - **Validation**: Pydantic
 - **API framework**: FastAPI (via run_ui.py)
 
+## Governance & security
+- **Penetration testing ROE:** [docs/guides/PEN_TESTING_ROE.md](docs/guides/PEN_TESTING_ROE.md) — Rules of engagement for all pen testing (authorization, scope, conduct). **Agent Zero** (hacker agent) and **Archon** (task/workflow context) must follow this ROE. Shared reference: [docs/guides/ROE_AGENT_ZERO_AND_ARCHON.md](docs/guides/ROE_AGENT_ZERO_AND_ARCHON.md).
+
 ## Constraints
 - Files must stay under 500 lines
 - Use `.venv` or project venv for Python commands
