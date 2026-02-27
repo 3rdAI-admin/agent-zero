@@ -2,6 +2,7 @@ from typing import Any, List, Sequence
 from langchain_community.vectorstores import FAISS
 
 # faiss needs to be patched for python 3.12 on arm #TODO remove once not needed
+from python.helpers import faiss_monkey_patch
 import faiss
 
 
