@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "archon": {
+      "transport": "http",
+      "url": "http://192.168.50.7:8051/mcp"
+    },
+    "archon-local": {
+      "transport": "http",
+      "url": "http://127.0.0.1:8051/mcp"
+    }
+  }
+}

@@ -41,19 +41,22 @@ AUTH_PASSWORD=your_password
 ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 ```
 
-## HTTPS / TLS (Remote MCP/A2A Clients)
+## HTTP vs HTTPS (MCP / A2A / Web UI)
 
 | Variable | Purpose | Where |
 |----------|---------|-------|
-| `AGENT_ZERO_CERT_IPS` | LAN IPs to add to TLS cert SAN | `docker-compose.yml` `environment:` |
-| `AGENT_ZERO_REGENERATE_CERT` | Set to `1` to regenerate cert (then remove) | `docker-compose.yml` `environment:` |
+| **`AGENT_ZERO_HTTP_ONLY`** | Set to `1` to serve **HTTP only** (no TLS). Use `http://` in MCP/A2A URLs; no cert setup. **Default in this repo.** | `docker-compose.yml` `environment:` |
+| `AGENT_ZERO_CERT_IPS` | LAN IPs to add to TLS cert SAN (only when not using HTTP-only) | `docker-compose.yml` `environment:` |
+| `AGENT_ZERO_REGENERATE_CERT` | Set to `1` once to regenerate cert (then remove) | `docker-compose.yml` `environment:` |
 
-Remote clients connecting via `https://<LAN-IP>:8888` need the host IP in the cert. After changing `AGENT_ZERO_CERT_IPS`, uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart, then re-comment it.
+- **HTTP mode** (`AGENT_ZERO_HTTP_ONLY=1`): Use `http://<host>:8888` for Web UI, MCP, and A2A. No certificate or Cursor launcher needed.
+- **HTTPS mode** (env unset): Use `https://<host>:8888`. For remote MCP/A2A, add your LAN IP to `AGENT_ZERO_CERT_IPS` and optionally run `./scripts/setup/trust_agent_zero_cert.sh` and start Cursor with `./scripts/setup/cursor_with_agent_zero_cert.sh`. See [docs/MCP_CURSOR_REMEDIATION.md](docs/MCP_CURSOR_REMEDIATION.md).
 
 ## Settings Persistence
 
 | Data | Location | Persisted via |
 |------|----------|---------------|
+| **Host repo (own code)** | `/git/agent-zero` in container | Bind mount `.:/git/agent-zero` (run compose from repo root) |
 | Auth, API keys | `.env` | Bind mount `./.env:/a0/.env` |
 | Model/agent config | `tmp/settings.json` | Bind mount `./tmp:/a0/tmp` |
 | Memory & chats | `memory/` | Bind mount `./memory:/a0/memory` |

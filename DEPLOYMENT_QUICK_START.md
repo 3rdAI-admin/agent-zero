@@ -60,6 +60,7 @@ Password:   [your password]
 
 The `.env` file (containing auth credentials and API keys) is bind-mounted into the container, so your login and API keys survive `docker compose down && up` and image rebuilds. Other persistent data:
 
+- **`.:/git/agent-zero`** – The host repo is mounted so Agent Zero can read and edit its own code at `/git/agent-zero` inside the container. Run `docker compose` from the repo root.
 - `./memory` - Agent memory and chats
 - `./knowledge` - Knowledge base files
 - `./logs` - Log files
@@ -87,16 +88,19 @@ To access Agent Zero from another device on your network:
 
 > Without `AUTH_LOGIN` set or your IP in `ALLOWED_ORIGINS`, you'll get: `"Origin not allowed when login is disabled"`
 
-## HTTPS / TLS for Remote Clients
+## HTTP vs HTTPS (MCP / A2A)
 
-Agent Zero serves HTTPS inside the container. For remote MCP or A2A clients connecting via `https://<LAN-IP>:8888`, add your host LAN IP to the TLS certificate:
+This repo defaults to **HTTP only** (`AGENT_ZERO_HTTP_ONLY=1` in docker-compose). Use **`http://<LAN-IP>:8888`** for the Web UI, MCP, and A2A; no certificate setup needed.
 
-1. In `docker-compose.yml`, set `AGENT_ZERO_CERT_IPS` to your host LAN IP:
+To use **HTTPS** instead (e.g. for remote clients that require TLS):
+
+1. In `docker-compose.yml`, remove or comment out `AGENT_ZERO_HTTP_ONLY=1`.
+2. Set `AGENT_ZERO_CERT_IPS` to your host LAN IP:
    ```yaml
    environment:
      - AGENT_ZERO_CERT_IPS=192.168.x.x
    ```
-2. Uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart, then re-comment it.
+3. Uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart, then re-comment it. For Cursor MCP, see [docs/MCP_CURSOR_REMEDIATION.md](docs/MCP_CURSOR_REMEDIATION.md).
 
 ## Troubleshooting
 

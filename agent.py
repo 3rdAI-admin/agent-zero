@@ -82,6 +82,8 @@ class AgentContext:
         self.last_message = last_message or datetime.now(timezone.utc)
         self.data = data or {}
         self.output_data = output_data or {}
+        self.last_result: str | None = None
+        self.last_error: str | None = None
 
 
 
@@ -139,7 +141,7 @@ class AgentContext:
     def remove(id: str):
         context = AgentContext._contexts.pop(id, None)
         if context and context.task:
-            context.task.kill()
+            context.task.kill(terminate_thread=True)
         return context
 
     def get_data(self, key: str, recursive: bool = True):
@@ -245,7 +247,7 @@ class AgentContext:
     ):
         if not self.task:
             self.task = DeferredTask(
-                thread_name=self.__class__.__name__,
+                thread_name=f"AgentContext-{self.id}",
             )
         self.task.start_task(func, *args, **kwargs)
         return self.task
@@ -264,8 +266,13 @@ class AgentContext:
             superior = agent.data.get(Agent.DATA_NAME_SUPERIOR, None)
             if superior:
                 response = await self._process_chain(superior, response, False)  # type: ignore
+            # Store result for async status polling
+            self.last_result = response
+            self.last_error = None
             return response
         except Exception as e:
+            self.last_error = str(e)
+            self.last_result = None
             agent.handle_critical_exception(e)
 
 

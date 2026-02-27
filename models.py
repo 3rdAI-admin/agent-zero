@@ -311,7 +311,11 @@ class LiteLLMChatWrapper(SimpleChatModel):
         model_config: Optional[ModelConfig] = None,
         **kwargs: Any,
     ):
-        model_value = f"{provider}/{model}"
+        # Avoid double-prefix: settings may already store "anthropic/claude-..."
+        if model.startswith(f"{provider}/"):
+            model_value = model
+        else:
+            model_value = f"{provider}/{model}"
         super().__init__(model_name=model_value, provider=provider, kwargs=kwargs)  # type: ignore
         # Set A0 model config as instance attribute after parent init
         self.a0_model_conf = model_config
@@ -673,7 +677,13 @@ class LiteLLMEmbeddingWrapper(Embeddings):
         model_config: Optional[ModelConfig] = None,
         **kwargs: Any,
     ):
-        self.model_name = f"{provider}/{model}" if provider != "openai" else model
+        # Avoid double-prefix when settings already store "provider/model-name"
+        if provider == "openai":
+            self.model_name = model
+        elif model.startswith(f"{provider}/"):
+            self.model_name = model
+        else:
+            self.model_name = f"{provider}/{model}"
         self.kwargs = kwargs
         self.a0_model_conf = model_config
 
@@ -836,6 +846,16 @@ def _parse_chunk(chunk: Any) -> ChatChunk:
 
 
 
+# Anthropic deprecated/alias model names -> current API model IDs (Anthropic 404 on old/date-stamped IDs)
+ANTHROPIC_MODEL_REMAP = {
+    "claude-3-5-sonnet-latest": "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet": "claude-3-5-sonnet-20241022",
+    "claude-sonnet-4-latest": "claude-sonnet-4-6",
+    "claude-sonnet-4": "claude-sonnet-4-6",
+    "claude-sonnet-4-20250514": "claude-sonnet-4-6",
+}
+
+
 def _adjust_call_args(provider_name: str, model_name: str, kwargs: dict):
     # for openrouter add app reference
     if provider_name == "openrouter":
@@ -847,6 +867,15 @@ def _adjust_call_args(provider_name: str, model_name: str, kwargs: dict):
     # remap other to openai for litellm
     if provider_name == "other":
         provider_name = "openai"
+
+    # Anthropic: normalize deprecated/alias model names to current API IDs (avoids 404 not_found_error)
+    if provider_name == "anthropic" and model_name:
+        name = model_name.split("/")[-1] if "/" in model_name else model_name
+        if name in ANTHROPIC_MODEL_REMAP:
+            model_name = ANTHROPIC_MODEL_REMAP[name]
+        elif name.startswith("claude-sonnet-4-") and name != "claude-sonnet-4-6":
+            # Date-stamped Sonnet 4 IDs (e.g. claude-sonnet-4-20250514) often 404; use current
+            model_name = "claude-sonnet-4-6"
 
     return provider_name, model_name, kwargs
 

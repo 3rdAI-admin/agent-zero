@@ -12,7 +12,9 @@ services:
     environment:
       # Claude Code config directory - persists OAuth credentials
       - CLAUDE_CONFIG_DIR=/home/claude/.claude
-      # For remote MCP/A2A clients: add host LAN IP to TLS cert so https://<IP>:8888 matches (default cert has localhost only)
+      # Serve HTTP only (no HTTPS): set to 1 to avoid self-signed cert issues for MCP/A2A. Use http:// in client URLs.
+      - AGENT_ZERO_HTTP_ONLY=1
+      # For remote MCP/A2A with HTTPS: add host LAN IP to TLS cert (ignore if using AGENT_ZERO_HTTP_ONLY=1)
       - AGENT_ZERO_CERT_IPS=192.168.50.7
       # Uncomment below once to regenerate cert with the IP above after first deploy, then remove to avoid regenerating every start
       # - AGENT_ZERO_REGENERATE_CERT=1
@@ -20,6 +22,10 @@ services:
       - "${HOST_PORT:-8888}:80"  # Web UI accessible on port 8888
       - "5901:5900"  # VNC server for browser access (CAPTCHA completion) - use 5901 to avoid conflicts
     volumes:
+      # Mount host repo so Agent Zero can read/edit its own code (run compose from repo root)
+      - .:/git/agent-zero
+      # Recommended: single host folder for projects and user data (future-proof; do not map entire /a0)
+      - /Users/james/Docker/A0_volume:/a0/usr
       # Persist .env so auth and API keys survive container recreation
       - ./.env:/a0/.env
       # Persist data directories that change at runtime
@@ -50,9 +56,14 @@ services:
       - NET_RAW      # Required for nmap and other raw socket tools
       - NET_ADMIN    # Required for advanced network operations
       - SYS_ADMIN    # May be needed for some security tools
-    # Allow access to host network services
+    # Hostname resolution: host gateway + optional LAN machines so the container can resolve names (ping, nmap, ssh, etc.)
+    # Syntax: "hostname:ip" per line. Use host-gateway for the host machine. Add your LAN hosts below.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      # Example: uncomment and edit so Agent Zero can resolve friendly names to LAN IPs
+      # - "nas:192.168.50.5"
+      # - "my-server:192.168.50.10"
+      # - "router:192.168.50.1"
     restart: unless-stopped
     # Resource limits - set to 16GB for better responsiveness; Docker Desktop must allow at least this much
     deploy:
@@ -64,7 +75,7 @@ services:
           memory: 8G      # Guaranteed RAM (reduces swapping; increase if agent is slow)
           cpus: '2.0'     # Guaranteed CPU
     healthcheck:
-      test: ["CMD", "curl", "-fk", "https://localhost"]
+      test: ["CMD", "curl", "-fsS", "http://localhost"]
       interval: 30s
       timeout: 5s
       retries: 5

@@ -1,0 +1,22 @@
+{
+  "include": [
+    "python",
+    "agent.py",
+    "models.py",
+    "run_ui.py",
+    "run_tunnel.py",
+    "preload.py"
+  ],
+  "exclude": [
+    "docker",
+    "node_modules",
+    "webui",
+    "knowledge",
+    "memory",
+    "logs",
+    "tmp",
+    "work_dir"
+  ],
+  "typeCheckingMode": "off",
+  "pythonVersion": "3.12"
+}

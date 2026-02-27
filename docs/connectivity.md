@@ -4,6 +4,8 @@ This guide covers the different ways to connect to Agent Zero from external appl
 
 **Note:** You can find your specific URLs and API tokens in your Agent Zero instance under `Settings > External Services`.
 
+**HTTP vs HTTPS:** This repo sets `AGENT_ZERO_HTTP_ONLY=1` by default, so the server listens on **HTTP** only. Use **`http://`** in all URLs below (e.g. `http://<host>:8888`, `http://<host>:8888/mcp/t-<TOKEN>/sse`, `http://<host>:8888/a2a/t-<TOKEN>`). If you disable HTTP-only to use HTTPS, see [MCP_CLIENT_CONNECTION.md](./MCP_CLIENT_CONNECTION.md) and [MCP_CURSOR_REMEDIATION.md](./MCP_CURSOR_REMEDIATION.md) for certificate setup.
+
 ### API Token Information
 
 The API token is automatically generated from your username and password. This same token is used for External API endpoints, MCP server connections, and A2A communication. The token will change if you update your credentials.
@@ -167,6 +169,152 @@ async function sendWithAttachment() {
 
 // Call the function
 sendWithAttachment();
+```
+
+---
+
+## `POST /api_message_async`
+
+Send a message to Agent Zero asynchronously. Returns immediately with a `context_id` for polling via `/api_message_status`. Use this when you don't want to hold an HTTP connection open for the entire agent processing loop (which can take 2+ minutes).
+
+### API Reference
+
+**Parameters:**
+*   `message` (string, required): The message to send
+*   `context_id` (string, optional): Existing chat context ID to continue
+*   `attachments` (array, optional): Array of `{filename, base64}` objects
+*   `lifetime_hours` (number, optional): Chat lifetime in hours (default: 24)
+
+**Headers:**
+*   `X-API-KEY` (required)
+*   `Content-Type: application/json`
+
+**Response:**
+```json
+{"context_id": "abc123", "status": "processing"}
+```
+
+### Examples
+
+#### curl
+
+```bash
+# Fire-and-forget
+curl -X POST "YOUR_AGENT_ZERO_URL/api_message_async" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -d '{"message": "Analyze the system logs.", "lifetime_hours": 24}'
+```
+
+#### JavaScript
+
+```javascript
+async function sendAsyncMessage(message) {
+    const response = await fetch('YOUR_AGENT_ZERO_URL/api_message_async', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-KEY': 'YOUR_API_KEY'
+        },
+        body: JSON.stringify({ message, lifetime_hours: 24 })
+    });
+    const data = await response.json();
+    console.log('Context ID:', data.context_id);  // Use this to poll status
+    return data;
+}
+```
+
+---
+
+## `GET/POST /api_message_status`
+
+Poll the status of an async message task started via `/api_message_async`. Returns the processing state and, when completed, the agent's response.
+
+### API Reference
+
+**Parameters:**
+*   `context_id` (string, required): The context ID returned by `/api_message_async`
+
+**Headers:**
+*   `X-API-KEY` (required)
+*   `Content-Type: application/json` (for POST)
+
+**Response:**
+```json
+{
+    "context_id": "abc123",
+    "status": "processing | completed | failed | idle | not_found",
+    "response": "Agent's response text (null while processing)"
+}
+```
+
+**Status values:**
+| Status | Meaning |
+|--------|---------|
+| `processing` | Agent is still working on the task |
+| `completed` | Task finished successfully; `response` contains the result |
+| `failed` | Task encountered an error; `response` contains the error message |
+| `idle` | Context exists but no task has been started |
+| `not_found` | No context with that ID exists |
+
+### Examples
+
+#### curl
+
+```bash
+# Poll by POST
+curl -X POST "YOUR_AGENT_ZERO_URL/api_message_status" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -d '{"context_id": "abc123"}'
+
+# Poll by GET
+curl "YOUR_AGENT_ZERO_URL/api_message_status?context_id=abc123" \
+  -H "X-API-KEY: YOUR_API_KEY"
+```
+
+#### JavaScript — Full async workflow
+
+```javascript
+async function asyncWorkflow(message) {
+    // 1. Send message (returns immediately)
+    const start = await fetch('YOUR_AGENT_ZERO_URL/api_message_async', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-KEY': 'YOUR_API_KEY'
+        },
+        body: JSON.stringify({ message, lifetime_hours: 24 })
+    });
+    const { context_id } = await start.json();
+    console.log('Started:', context_id);
+
+    // 2. Poll until completed or failed
+    while (true) {
+        await new Promise(r => setTimeout(r, 5000));  // Wait 5 seconds
+        const poll = await fetch('YOUR_AGENT_ZERO_URL/api_message_status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-KEY': 'YOUR_API_KEY'
+            },
+            body: JSON.stringify({ context_id })
+        });
+        const status = await poll.json();
+        console.log('Status:', status.status);
+
+        if (status.status === 'completed') {
+            console.log('Response:', status.response);
+            return status.response;
+        }
+        if (status.status === 'failed') {
+            console.error('Error:', status.response);
+            throw new Error(status.response);
+        }
+    }
+}
+
+asyncWorkflow("List files in the current directory.");
 ```
 
 ---
@@ -584,15 +732,15 @@ To connect another agent to your Agent Zero instance, use the following URL form
 YOUR_AGENT_ZERO_URL/a2a/t-YOUR_API_TOKEN
 ```
 
-### A2A and TLS (remote clients)
+### A2A and HTTP vs HTTPS
 
-Agent Zero serves both MCP and A2A over **HTTPS** with the same self-signed certificate. When a remote client (e.g. PCI-DSS Assistant) connects to `https://<host>:8888/a2a/t-<token>`, it may fail with:
+**HTTP mode (default in this repo):** When **`AGENT_ZERO_HTTP_ONLY=1`** is set in docker-compose, Agent Zero serves MCP and A2A over **HTTP**. Use `http://<host>:8888/a2a/t-<token>` as the A2A URL. No TLS or certificate configuration is needed.
+
+**HTTPS mode:** When `AGENT_ZERO_HTTP_ONLY` is not set, Agent Zero serves both MCP and A2A over **HTTPS** with a self-signed certificate. A remote client connecting to `https://<host>:8888/a2a/t-<token>` may see:
 
 - **`SSL::CERTIFICATE_VERIFY_FAILED` / "certificate verify failed:self-signed certificate"** – The client is verifying the server certificate and rejecting the self-signed cert.
 
-**Fix:**
+**Fix for HTTPS mode:**
 
-1. **On the client (e.g. PCI-DSS Assistant):** Enable **skip TLS verification** (or "allow self-signed certificates") for the Agent Zero A2A agent URL. Use the same approach as for MCP: the client must not verify the server certificate for this host.
-2. **On Agent Zero:** Set `AGENT_ZERO_CERT_IPS=<your-LAN-IP>` (e.g. `192.168.50.7`) in docker-compose `environment`, then recreate the container (`docker compose down && docker compose up -d`) so the certificate includes that IP. That way the cert matches when connecting to `https://192.168.50.7:8888` and avoids hostname mismatch after verification is skipped.
-
-If the client app does not expose a "skip TLS verify" option for A2A agents, it needs to be added (same as for MCP).
+1. **On the client:** Enable **skip TLS verification** (or "allow self-signed certificates") for the Agent Zero A2A agent URL, if the app supports it.
+2. **On Agent Zero:** Set `AGENT_ZERO_CERT_IPS=<your-LAN-IP>` (e.g. `192.168.50.7`) in docker-compose `environment`, then recreate the container so the certificate includes that IP. See [MCP_CLIENT_CONNECTION.md](./MCP_CLIENT_CONNECTION.md) and [MCP_CURSOR_REMEDIATION.md](./MCP_CURSOR_REMEDIATION.md) for cert trust and Cursor.

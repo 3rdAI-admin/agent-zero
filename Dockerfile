@@ -32,6 +32,9 @@ RUN bash /ins/install_owasp_tools.sh "$BRANCH"
 ARG CACHE_DATE=none
 RUN echo "cache buster ${CACHE_DATE}" && bash /ins/install_A02.sh "$BRANCH"
 
+# Sync repo into /a0 so the app (run_ui.py, models.py, etc.) uses built code including local fixes.
+RUN mkdir -p /a0 && cp -rn /git/agent-zero/. /a0/
+
 # Remove apt caches to keep the image lean.
 RUN bash /ins/post_install.sh "$BRANCH"
 

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Rebuild Agent Zero image and restart the container.
+# Use this after code changes (e.g. models.py) so the app in /a0 picks up updates.
+# Run from repo root: ./rebuild.sh
+
+set -e
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$REPO_ROOT"
+
+if ! [ -f "docker-compose.yml" ] || ! [ -f ".env" ]; then
+    echo "Error: Run from AgentZ repo root (where docker-compose.yml and .env live)."
+    exit 1
+fi
+
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose)
+else
+    COMPOSE=(docker-compose)
+fi
+
+echo "Building agent-zero image..."
+"${COMPOSE[@]}" build agent-zero
+
+echo "Restarting container..."
+"${COMPOSE[@]}" up -d agent-zero
+
+echo ""
+echo "Done. Wait for health (e.g. docker compose ps), then:"
+echo "  - Web UI: http://localhost:${HOST_PORT:-8888}"
+echo "  - Optional litellm test: see FIXMODELS.md Verification Steps"

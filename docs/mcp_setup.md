@@ -2,6 +2,8 @@
 
 This guide explains how to configure and utilize external tool providers through the Model Context Protocol (MCP) with Agent Zero. This allows Agent Zero to leverage tools hosted by separate local or remote MCP-compliant servers.
 
+**Connecting *to* Agent Zero as an MCP server** (e.g. from Cursor, Claude Code): see [MCP_CLIENT_CONNECTION.md](./MCP_CLIENT_CONNECTION.md) and [MCP_CURSOR_REMEDIATION.md](./MCP_CURSOR_REMEDIATION.md). This repo uses HTTP by default (`AGENT_ZERO_HTTP_ONLY=1`), so use `http://` in client URLs.
+
 ## What are MCP Servers?
 
 MCP servers are external processes or services that expose a set of tools that Agent Zero can use. Agent Zero acts as an MCP *client*, consuming tools made available by these servers. The integration supports three main types of MCP servers:

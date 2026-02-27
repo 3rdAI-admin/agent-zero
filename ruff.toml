@@ -1,0 +1,14 @@
+# Agent Zero – Ruff lint/format config
+# See https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+line-length = 88
+exclude = ["venv", ".venv", "webui/vendor", "claude-credentials"]
+
+# Tests and some helpers use late imports (sys.path, circular deps, nest_asyncio.apply(), atexit).
+[lint.per-file-ignores]
+"tests/*" = ["E402"]
+"python/helpers/files.py" = ["E402"]
+"python/helpers/log.py" = ["E402"]
+"python/helpers/print_style.py" = ["E402"]
+"python/helpers/task_scheduler.py" = ["E402"]

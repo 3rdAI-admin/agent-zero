@@ -51,6 +51,7 @@
 
 ### Integration
 - **[Agent Zero + Claude Integration](./integration/AGENT_ZERO_CLAUDE_INTEGRATION.md)** - Technical integration
+- **[Agent Zero for ZeroClaw Integrators](./AGENT_ZERO_FOR_ZEROCLAW_INTEGRATORS.md)** - API, MCP, A2A entrypoints and constraints for ZeroClaw
 - **[Integration Confirmed](./integration/INTEGRATION_CONFIRMED.md)** - Integration verification
 - **[Integration Test Results](./integration/INTEGRATION_TEST_RESULTS.md)** - Test results
 
@@ -62,6 +63,8 @@
 - **Use Claude Code**: [Claude Code Integration](./CLAUDE_CODE_INTEGRATION.md)
 - **Run security scans**: [Security Setup](./guides/SECURITY_SETUP.md)
 - **Connect remotely (API/MCP/A2A)**: [Connectivity](./connectivity.md)
+- **Integrate ZeroClaw with Agent Zero**: [Agent Zero for ZeroClaw Integrators](./AGENT_ZERO_FOR_ZEROCLAW_INTEGRATORS.md)
+- **MCP in Cursor (HTTP/HTTPS, cert fix)**: [MCP Cursor Remediation](./MCP_CURSOR_REMEDIATION.md) · [MCP Client Connection](./MCP_CLIENT_CONNECTION.md)
 - **Troubleshoot issues**: [Troubleshooting](./troubleshooting.md)
 - **Find a command**: [Quick Reference](./QUICK_REFERENCE.md)
 - **Understand architecture**: [Architecture](./architecture.md)

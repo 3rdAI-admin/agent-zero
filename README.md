@@ -163,6 +163,8 @@ docker run -p 50001:80 agent0ai/agent-zero
   - Ensure the host firewall allows inbound TCP traffic on the chosen port (8888 by default).
   - For WAN access, tunnel/forward the same port through your router or use the built-in tunnel service.
 - Volumes:
+  - The host repo is mounted at **`/git/agent-zero`** in the container so Agent Zero can read and edit its own code (run `docker compose` from the repo root).
+  - **`/Users/james/Docker/A0_volume:/a0/usr`** — recommended single mount for projects and user data (future-proof; do not map the entire `/a0`).
   - `./memory`, `./knowledge`, `./logs`, and `./tmp` are mounted into the container to persist runtime data between restarts. Feel free to customize or remove individual mounts if you want a stateless container.
 
 - Customizable settings allow users to tailor the agent's behavior and responses to their needs.
@@ -203,9 +205,10 @@ docker run -p 50001:80 agent0ai/agent-zero
 
 ## 🎯 Changelog
 
-### Local: Code Quality, HTTPS, and Bug Fixes
+### Local: Concurrent API, Code Quality, HTTPS, and Bug Fixes
+- **Concurrent API requests**: Per-context EventLoopThread isolation so multiple API requests process independently. New `POST /api_message_async` (fire-and-forget) and `GET/POST /api_message_status` (polling) endpoints for non-blocking external integrations. See [Connectivity](./docs/connectivity.md).
 - **Code quality**: Full Black formatter and linting pass across the Python codebase
-- **HTTPS/TLS for LAN access**: Self-signed cert now supports custom LAN IPs via `AGENT_ZERO_CERT_IPS` env var for remote MCP/A2A clients
+- **HTTP-only default**: `AGENT_ZERO_HTTP_ONLY=1` so MCP/A2A use `http://` with no cert setup. Optional HTTPS via `AGENT_ZERO_CERT_IPS` and cert trust (see [docs/MCP_CURSOR_REMEDIATION.md](docs/MCP_CURSOR_REMEDIATION.md))
 - **Memory consolidation fix**: Timeout during memory consolidation no longer silently drops memories — falls back to direct save
 - **Memory consolidation performance**: Consolidator object reused across loop iterations instead of re-created per fragment
 - **Docker build fix**: Added `setuptools` install before `requirements.txt` so `openai-whisper` builds correctly

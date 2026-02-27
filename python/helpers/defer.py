@@ -39,10 +39,18 @@ class EventLoopThread:
         self.loop.run_forever()
 
     def terminate(self):
+        """Stop the event loop and clean up the thread.
+
+        Also removes this instance from the singleton cache so future
+        requests for the same thread_name create a fresh instance.
+        """
         if self.loop and self.loop.is_running():
             self.loop.stop()
         self.loop = None
         self.thread = None
+        # Remove from singleton cache to prevent memory leaks
+        with self.__class__._lock:
+            self.__class__._instances.pop(self.thread_name, None)
 
     def run_coroutine(self, coro):
         self._start()

@@ -6,10 +6,10 @@ This guide is for any application (PCI-DSS Assistant, Cursor, Claude Code, or cu
 
 | Item | Value |
 |------|--------|
-| **Scheme** | `https` only (not `http`) |
-| **URL (SSE)** | `https://<host>:8888/mcp/t-<TOKEN>/sse` |
+| **Scheme** | **HTTP** when `AGENT_ZERO_HTTP_ONLY=1` (default in this repo); **HTTPS** otherwise |
+| **URL (SSE)** | `http://<host>:8888/mcp/t-<TOKEN>/sse` (HTTP) or `https://<host>:8888/mcp/t-<TOKEN>/sse` (HTTPS) |
 | **Token** | From Agent Zero Web UI → Settings → MCP Server (exact, case-sensitive) |
-| **TLS** | Server uses a **self-signed certificate** — see below |
+| **TLS** | When using HTTPS, server uses a self-signed certificate — see below. When using HTTP, no TLS. |
 
 ## Why connections fail
 
@@ -19,12 +19,13 @@ Agent Zero serves HTTPS with a **self-signed** certificate. Many MCP clients ver
 
 **Fix in the client:**
 
-- **Option A:** Disable TLS verification for the Agent Zero host (e.g. “Allow insecure”, “Skip certificate verification”, or the equivalent in your app).
-- **Option B:** If the client supports custom CAs, export the server cert from the container and add it as trusted:
+- **Option A (recommended for this repo):** Use the one-time setup so the cert is trusted. From repo root run `./scripts/setup/trust_agent_zero_cert.sh`, then start Cursor with `./scripts/setup/cursor_with_agent_zero_cert.sh` (or set `NODE_EXTRA_CA_CERTS` to `tmp/agent-zero-server.crt` and open Cursor). See [MCP_CURSOR_REMEDIATION.md](./MCP_CURSOR_REMEDIATION.md#one-time-fix-for-agent-zero-self-signed-certificate-recommended).
+- **Option B:** Disable TLS verification for the Agent Zero host (e.g. “Allow insecure”, “Skip certificate verification”, or the equivalent in your app), if the client offers it.
+- **Option C:** Export the server cert and add it as trusted manually:
   ```bash
   docker cp agent-zero:/etc/ssl/agent-zero/server.crt ./agent-zero-server.crt
   ```
-  Then configure the client to trust `agent-zero-server.crt` for `https://<host>:8888`.
+  Then configure the client to trust that file (e.g. system keychain, or `NODE_EXTRA_CA_CERTS` when launching the app).
 
 If you cannot change the client (e.g. no “insecure” option), the only option is to make the client trust the cert (Option B) or run a reverse proxy in front of Agent Zero that presents a trusted certificate.
 
@@ -39,9 +40,9 @@ Get the current token from:
 - Agent Zero Web UI → **Settings → MCP Server**, or  
 - Inside the container: `docker exec agent-zero cat /a0/tmp/settings.json` (see `mcp_server_token`; if empty, use the token shown in the Web UI).
 
-### 3. Using HTTP instead of HTTPS
+### 3. HTTP vs HTTPS
 
-The server only responds on **HTTPS**. Plain `http://...:8888/...` gets an empty reply and looks like a connection failure. Always use `https://` in the client URL.
+When **`AGENT_ZERO_HTTP_ONLY=1`** (set in this repo’s docker-compose), the server listens on **HTTP** only. Use `http://<host>:8888/...` in client URLs; no TLS or cert setup. When that env is not set, the server uses **HTTPS** and you must use `https://` in the client URL (and deal with the self-signed cert as above).
 
 ### 4. Connection OK but "0 tools" / tools not loading
 
@@ -75,10 +76,33 @@ Run the test from the **same environment** where your MCP client runs (same host
 
 If Option B passes from the PCI app host but the app still fails, the issue is in the app (config, timeout, or SSE handling). If this passes, the server is fine; any remaining “connection failed” in the client is due to TLS verification, token, or URL/host (see above).
 
+## HTTP-only mode (this repo)
+
+This repo sets **`AGENT_ZERO_HTTP_ONLY=1`** in docker-compose. The server listens on **HTTP** only. Use **`http://<host>:8888/mcp/t-<TOKEN>/sse`** in MCP client config and **`http://<host>:8888/a2a/t-<TOKEN>`** for A2A. No certificate or TLS setup is required.
+
+## Will HTTPS keep being an issue for MCP and A2A (when using HTTPS)?
+
+**Yes**, as long as Agent Zero serves MCP and A2A over **HTTPS with a self-signed certificate** and the client verifies TLS by default. Any client that does not “allow insecure” or trust the cert will keep failing (e.g. Cursor MCP, A2A clients in other apps).
+
+**Ways to avoid it being an ongoing issue:**
+
+1. **Trust the cert once**  
+   Export the server cert, add it to the system keychain (or set `SSL_CERT_FILE`), and ensure the cert’s SAN includes your host (e.g. `AGENT_ZERO_CERT_IPS=192.168.50.7`). Then MCP and A2A work without per-client workarounds.
+
+2. **Client “skip TLS” / “allow insecure”**  
+   If the client (Cursor, PCI-DSS Assistant, etc.) has an option to skip certificate verification for this host, enable it. No server change.
+
+3. **Reverse proxy with a trusted cert**  
+   Put Agent Zero behind nginx/Caddy/traefik with a real or internally trusted certificate. Clients connect to the proxy; no self-signed cert in the path.
+
+4. **Future: HTTP for dev**  
+   If Agent Zero ever supports serving MCP/A2A over HTTP (e.g. on localhost or behind a dev flag), local clients could use that and avoid TLS entirely in dev. Today the server only responds on HTTPS.
+
+Same considerations apply to **A2A** as to MCP; see [connectivity.md](./connectivity.md) (A2A and TLS).
+
 ## Summary checklist for client config
 
-- [ ] URL uses **https** (not http).
-- [ ] URL is `https://<host>:8888/mcp/t-<TOKEN>/sse` (for SSE transport).
+- [ ] **If HTTP mode** (`AGENT_ZERO_HTTP_ONLY=1`): URL uses **http**, e.g. `http://<host>:8888/mcp/t-<TOKEN>/sse`. No TLS setup.
+- [ ] **If HTTPS mode**: URL uses **https**; client must skip TLS verification or trust the server’s self-signed cert.
 - [ ] Token is exact and case-sensitive (from Web UI or container settings).
-- [ ] Client is configured to **skip TLS verification** for this host, or to trust the server’s self-signed cert.
 - [ ] `<host>` is an address the client can reach (e.g. localhost or the LAN IP of the Agent Zero host).

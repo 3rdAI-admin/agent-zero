@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../Archon"
+		}
+	],
+	"settings": {
+		"js/ts.implicitProjectConfig.checkJs": true
+	}
+}

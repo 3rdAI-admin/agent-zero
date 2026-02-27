@@ -246,11 +246,15 @@ def run():
 
     app = DispatcherMiddleware(webapp, middleware_routes)  # type: ignore
 
-    # Enable HTTPS with self-signed cert if available (allows browser microphone access)
+    # Enable HTTPS with self-signed cert if available (allows browser microphone access).
+    # Set AGENT_ZERO_HTTP_ONLY=1 to serve HTTP only (no TLS); avoids cert issues for MCP/A2A on local/LAN.
     ssl_ctx = None
     cert_file = "/etc/ssl/agent-zero/server.crt"
     key_file = "/etc/ssl/agent-zero/server.key"
-    if os.path.isfile(cert_file) and os.path.isfile(key_file):
+    http_only = os.environ.get("AGENT_ZERO_HTTP_ONLY", "").strip().lower() in ("1", "true", "yes")
+    if http_only:
+        PrintStyle().debug(f"Starting server at http://{host}:{port} ... (AGENT_ZERO_HTTP_ONLY)")
+    elif os.path.isfile(cert_file) and os.path.isfile(key_file):
         ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_ctx.load_cert_chain(cert_file, key_file)
         PrintStyle().debug(f"Starting server at https://{host}:{port} ...")
@@ -268,9 +272,9 @@ def run():
     process.set_server(server)
     server.log_startup()
 
-    # Start init_a0 in a background thread when server starts
-    # threading.Thread(target=init_a0, daemon=True).start()
-    init_a0()
+    # Run init_a0 in a background thread so the server accepts connections immediately.
+    # Otherwise the UI never "loads" if init (e.g. load_tmp_chats, MCP, job loop) blocks or is slow.
+    threading.Thread(target=init_a0, daemon=True).start()
 
     # run the server
     server.serve_forever()
@@ -279,8 +283,11 @@ def run():
 def init_a0():
     # initialize contexts and MCP
     init_chats = initialize.initialize_chats()
-    # only wait for init chats, otherwise they would seem to disappear for a while on restart
-    init_chats.result_sync()
+    # wait for chat load with timeout so a slow/corrupt tmp/chats does not block forever
+    try:
+        init_chats.result_sync(timeout=60)
+    except TimeoutError:
+        PrintStyle().print("Warning: loading saved chats timed out after 60s; continuing without them.")
 
     initialize.initialize_mcp()
     # start job loop

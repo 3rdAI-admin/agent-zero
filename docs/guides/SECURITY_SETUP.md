@@ -41,6 +41,29 @@ This provides network scanning capabilities while maintaining some isolation.
 - May have limitations with some advanced network operations
 - Requires port mapping for services
 
+### Resolving LAN hostnames (so Agent Zero can “see” other machines by name)
+
+To let the container resolve friendly names (e.g. `nas`, `my-server`) to LAN IPs—so tools like `ping`, `nmap`, and `ssh` work by hostname—use **`extra_hosts`** in `docker-compose.yml`. That injects entries into the container’s `/etc/hosts`.
+
+**Correct syntax** (one entry per host, or multiple hostnames for one IP):
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"   # host machine (already present)
+  - "nas:192.168.50.5"                    # hostname:ip
+  - "my-server:192.168.50.10"
+  - "router:192.168.50.1"
+  # Multiple names for same IP: "name1 name2:192.168.50.20"
+  - "printer print-server:192.168.50.20"
+```
+
+- Use **hostname** (no spaces) then a single colon then **IP**. No spaces around the colon.
+- After changing `extra_hosts`, run `docker compose up -d` (recreate the container so the new entries are applied).
+
+**Do not use the Settings Secret Store or Variables Store for this.** Those are for credentials and env vars the agent uses; they do not change the container’s `/etc/hosts`. Name resolution for commands like `ping nas` or `nmap my-server` must come from `extra_hosts` (or a custom `/etc/hosts` mount, which is more involved).
+
+**Optional:** If you only need the *agent* to know “nas = 192.168.50.5” for planning or prompts (and don’t need the OS to resolve the name), you can add a line in **Settings → Secrets → Variables Store**, e.g. `LAN_HOSTS=nas=192.168.50.5,server=192.168.50.10`. The agent can read that; the shell still won’t resolve `nas` unless you also add it via `extra_hosts`.
+
 ## Installing Security Tools
 
 ### Method 1: Run Installation Script Inside Container

@@ -126,7 +126,12 @@ ports:
   - "5901:5900"              # VNC server
 
 volumes:
+  - .:/git/agent-zero                                        # Host repo: Agent Zero can read/edit its own code
   - ./.env:/a0/.env                                          # Auth & API keys (persistent)
+  - ./memory:/a0/memory
+  - ./knowledge:/a0/knowledge
+  - ./logs:/a0/logs
+  - ./tmp:/a0/tmp
   - ./claude-config:/root/.config/claude-code                # Claude Code OAuth (root)
   - ./claude-config:/home/claude/.config/claude-code         # Claude Code OAuth (claude user)
   - ./claude-credentials:/home/claude/.claude                # Claude Code credential tokens
@@ -154,21 +159,24 @@ ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 > **Note**: The `.env` file is volume-mounted so that authentication credentials
 > and API keys persist across container recreations (`docker compose down && up`).
 
-### HTTPS / TLS
+### HTTP vs HTTPS (MCP / A2A / Web UI)
 
-Agent Zero serves HTTPS inside the container. The healthcheck uses `https://localhost`. For local access on the host, `http://localhost:8888` works because the host port maps to the container's HTTPS port 80.
+This repo sets **`AGENT_ZERO_HTTP_ONLY=1`** in `docker-compose.yml`, so Agent Zero serves **HTTP only**. Use **`http://`** for the Web UI, MCP, and A2A (e.g. `http://localhost:8888`, `http://<LAN-IP>:8888/mcp/t-<TOKEN>/sse`). No TLS or certificate setup is required; Cursor and other MCP/A2A clients connect without "self signed certificate" errors.
 
-For **remote MCP or A2A clients** that connect via `https://<LAN-IP>:8888`, the self-signed TLS certificate must include the host's LAN IP in its Subject Alternative Names (SAN). Configure this in `docker-compose.yml`:
+To use **HTTPS** instead (e.g. for browser microphone/WebRTC or stricter security):
+
+1. Remove or comment out **`AGENT_ZERO_HTTP_ONLY=1`** in `docker-compose.yml`.
+2. For **remote MCP or A2A** via `https://<LAN-IP>:8888`, add your host's LAN IP to the TLS certificate in `docker-compose.yml`:
 
 ```yaml
 environment:
-  # Add your host LAN IP to the TLS certificate
+  # - AGENT_ZERO_HTTP_ONLY=1   # comment out for HTTPS
   - AGENT_ZERO_CERT_IPS=192.168.50.7
   # Uncomment ONCE to regenerate cert, then re-comment to avoid regenerating every start
   # - AGENT_ZERO_REGENERATE_CERT=1
 ```
 
-After changing `AGENT_ZERO_CERT_IPS`, uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart the container, then comment it out again.
+3. After changing `AGENT_ZERO_CERT_IPS`, uncomment `AGENT_ZERO_REGENERATE_CERT=1`, restart the container, then comment it out again. For Cursor MCP, see [MCP_CURSOR_REMEDIATION.md](./MCP_CURSOR_REMEDIATION.md) (cert trust or launcher script).
 
 ### Authentication & LAN Access
 
@@ -195,6 +203,16 @@ Settings are stored in two locations:
 | Model config, memory settings, etc. | `tmp/settings.json` | Bind mount `./tmp:/a0/tmp` |
 
 > **Important**: Auth credentials are explicitly stripped from `tmp/settings.json` for security. They are stored only in `.env`. Both files persist across `docker compose down && up` and image rebuilds via bind mounts.
+
+### Access to own code (host repo mount)
+
+The host repository is bind-mounted into the container at **`/git/agent-zero`**. When you run `docker compose` from the repo root (e.g. `/Users/james/Docker/AgentZ`), the container sees the live code there.
+
+- **Inside the container:** Code is at `/git/agent-zero` (e.g. `ls /git/agent-zero`, `cat /git/agent-zero/README.md`).
+- **Edits** made inside the container to files under `/git/agent-zero` appear on the host immediately.
+- **Requirement:** Run `docker compose` from the Agent Zero repo root so the `.:/git/agent-zero` mount points at the correct directory.
+
+This lets Agent Zero read and modify its own source (e.g. for self-improvement tasks or code review) while keeping a single copy on the host.
 
 ## Common Tasks
 
