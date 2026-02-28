@@ -24,7 +24,8 @@ services:
     volumes:
       # Mount host repo so Agent Zero can read/edit its own code (run compose from repo root)
       - .:/git/agent-zero
-      # Recommended: single host folder for projects and user data (future-proof; do not map entire /a0)
+      # Projects, tasks (scheduler), settings, chats live in usr — must persist across rebuilds
+      # Use this exact host path so projects/tasks don't disappear after docker compose build/up
       - /Users/james/Docker/A0_volume:/a0/usr
       # Persist .env so auth and API keys survive container recreation
       - ./.env:/a0/.env

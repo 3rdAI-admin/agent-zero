@@ -10,17 +10,28 @@
 #   Key: set in Settings → API Keys (Agent Zero Venice.ai) or .env as API_KEY_A0_VENICE=sk-a0-...
 #
 # Where settings are written (so the container sees the change):
-#   - From host (./MODELS.sh): writes to repo usr/settings.json.
-#     With docker-compose, the container uses a separate volume for usr (e.g. A0_volume),
-#     so the container will NOT see the change unless you point at that volume:
-#     A0_USR_PATH=/path/to/A0_volume ./MODELS.sh agent-zero
+#   - From host, writing to the volume (recommended so container sees the change):
+#     cd /Users/james/Docker/AgentZ
+#     A0_USR_PATH=/Users/james/Docker/A0_volume ./MODELS.sh ollama
+#   - Or from the volume (A0_volume has a wrapper that calls this script with A0_USR_PATH set):
+#     cd /Users/james/Docker/A0_volume && ./MODELS.sh ollama
+#   - From host (./MODELS.sh only): writes to repo usr/settings.json; container won't see it if usr is a volume.
 #   - From inside container: writes to /a0/usr/settings.json (the volume the app uses):
-#     docker exec agent-zero /a0/MODELS.sh agent-zero
+#     docker exec agent-zero /a0/MODELS.sh ollama
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR" && pwd)"
 cd "$REPO_ROOT"
+
+# MODELS.sh and scripts/ must live in the same repo; writing to a volume uses A0_USR_PATH
+if [[ ! -f "$REPO_ROOT/scripts/switch_model_preset.py" ]]; then
+  echo "Error: scripts/switch_model_preset.py not found (run from AgentZ repo, not from A0_Volume)."
+  echo "To write settings to the volume, run from the repo:"
+  echo "  cd /Users/james/Docker/AgentZ"
+  echo "  A0_USR_PATH=/Users/james/Docker/A0_volume ./MODELS.sh ollama"
+  exit 2
+fi
 
 PRESET="${1:-}"
 if [[ -z "$PRESET" ]]; then
@@ -30,7 +41,7 @@ if [[ -z "$PRESET" ]]; then
   echo "  anthropic   Chat/Utility/Browser -> Anthropic (Claude)"
   echo "  venice      Chat/Utility/Browser -> Venice.ai direct (mistral-31-24b, qwen3-4b)"
   echo "  agent-zero  Chat/Utility/Browser -> Agent Zero API (llm.agent-zero.ai/v1, mistral-31-24b, qwen3-4b, temp 0.2)"
-  echo "  ollama      Chat/Utility/Browser -> Ollama (qwen2.5:latest, localhost:11434)"
+  echo "  ollama      Chat/Utility/Browser -> Ollama (qwen2.5:latest, 192.168.50.7:11434)"
   echo ""
   echo "Optional: --test-llm  Run a short LLM call to verify the model responds."
   exit 2
@@ -78,7 +89,7 @@ fi
 echo "Venice.ai     -> set Venice.ai key in Settings → API Keys or API_KEY_VENICE in .env."
 echo "Agent Zero    -> set Agent Zero API key (sk-a0-...) in Settings → API Keys or API_KEY_A0_VENICE."
 echo "Anthropic     -> set API_KEY_ANTHROPIC."
-echo "Ollama        -> ensure Ollama is running at api_base (e.g. localhost:11434)."
+echo "Ollama        -> ensure Ollama is running at api_base (192.168.50.7:11434)."
 echo "----------------------------------------------"
 if [[ -x "$REPO_ROOT/restart.sh" ]]; then
   echo "Restarting Agent Zero..."

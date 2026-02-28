@@ -52,12 +52,12 @@ The **ollama** preset sets Chat, Utility, and Browser to Ollama with these value
 | Setting | Value |
 |--------|--------|
 | **Provider** | `ollama` |
-| **API base** | `http://localhost:11434` |
+| **API base** | `http://192.168.50.7:11434` |
 | **Chat model** | `qwen2.5:latest` |
 | **Utility model** | `qwen2.5:latest` |
 | **Browser model** | `qwen2.5:latest` |
 
-Ensure `qwen2.5:latest` (or the model you choose) is pulled: `ollama pull qwen2.5:latest`.
+The preset uses **192.168.50.7:11434** as the Ollama host. Ensure Ollama is running on that host and the model is pulled: `ollama pull qwen2.5:latest` (on the Ollama server).
 
 ### Apply the preset
 
@@ -78,7 +78,7 @@ Then **restart** the app or container.
 
 ### Custom host or port
 
-The preset uses `http://localhost:11434`. If Ollama runs on another host or port:
+The preset uses `http://192.168.50.7:11434`. If Ollama runs on another host or port:
 
 - **Settings UI:** Settings → Chat / Utility / Browser model → set **API base URL** to e.g. `http://YOUR_IP:11434` or `http://host.docker.internal:11434` (Docker, Ollama on host).
 - **Or** edit `usr/settings.json` and set `chat_model_api_base`, `util_model_api_base`, `browser_model_api_base` to your Ollama URL.
