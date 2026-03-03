@@ -26,6 +26,11 @@
                 const jsonExample = JSON.stringify({
                     "mcpServers":
                     {
+                        "google_workspace": {
+                            "description": "Gmail, Drive, Docs, Sheets, Calendar (use workspace-mcp container or host).",
+                            "url": "http://workspace_mcp:8889/mcp",
+                            "type": "streamable-http"
+                        },
                         "sqlite": {
                             "command": "uvx",
                             "args": [

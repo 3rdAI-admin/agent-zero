@@ -40,7 +40,14 @@ claude-credentials/
 claude-config/
 claude-keyring/
 claude-gnome-keyring/
+workspace-mcp-credentials/
+
+# Playwright browser binaries (persisted via docker-compose volume mount)
+playwright-browsers/
 venv/
+
+# use-cases (Context Engineering template) - dependency installs
+use-cases/mcp-server/node_modules/
 
 # for browser-use
 agent_history.gif

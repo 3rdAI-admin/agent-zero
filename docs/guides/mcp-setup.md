@@ -83,6 +83,95 @@ In the JSON editor, add your MCP server configuration. Here's a simple example:
 }
 ```
 
+## Google Workspace MCP (full workspace)
+
+For **Gmail, Drive, Docs, Sheets, Slides, Calendar, Tasks, and more** in one MCP server, use [Google Workspace MCP](https://workspacemcp.com/) (`workspace-mcp`). It uses OAuth 2.1 and supports stdio or streamable HTTP.
+
+### Prerequisites
+
+- **Python 3.10+** and **uv** (for `uvx`). In Docker, ensure the image has `uv`/`uvx` or run the server on the host (see HTTP option below).
+- **Google OAuth credentials:** Create a Desktop OAuth client in [Google Cloud Console](https://console.cloud.google.com/) (APIs & Services → Credentials). Set:
+  - `GOOGLE_OAUTH_CLIENT_ID` — your client ID (e.g. `xxxxx.apps.googleusercontent.com`)
+  - `GOOGLE_OAUTH_CLIENT_SECRET` — your client secret
+
+### Option 1: Stdio (local, same machine)
+
+Run the server as a subprocess. Set the env vars in your environment (or in `.env` / container env) so the MCP process can use them. First run may open a browser for OAuth; in headless Docker you may need to complete OAuth on the host and reuse tokens.
+
+```json
+{
+  "mcpServers": {
+    "google_workspace": {
+      "description": "Gmail, Drive, Docs, Sheets, Slides, Calendar, Tasks (OAuth required)",
+      "command": "uvx",
+      "args": ["workspace-mcp", "--tool-tier", "core"],
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "your-client-id.apps.googleusercontent.com",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "your-client-secret"
+      }
+    }
+  }
+}
+```
+
+- **Tool tiers:** `--tool-tier core` (recommended), `extended`, or `complete`. Or list services: `--tools gmail drive calendar tasks sheets docs slides`.
+- **Read-only:** Add `--read-only` to restrict to read operations.
+
+### Option 2a: Containerized (same stack as Agent Zero) — recommended with Docker Compose
+
+If you run Agent Zero with `docker compose up`, you can run the Workspace MCP as a service in the same stack. No host script needed after one-time OAuth setup.
+
+1. **First-time OAuth:** Run the host script once so a browser can complete Google sign-in, then copy credentials for the container:
+   ```bash
+   ./scripts/setup/run_workspace_mcp.sh
+   # Use a tool (e.g. list emails) to trigger OAuth in the browser, then Ctrl+C
+   mkdir -p workspace-mcp-credentials
+   cp -r ~/.google_workspace_mcp/* workspace-mcp-credentials/
+   ```
+
+2. **Start the stack** (includes `workspace_mcp`): `docker compose up -d`
+
+3. **Add the server in Agent Zero** — **Settings → MCP/A2A → External MCP Servers → Open**. Add:
+   ```json
+   {
+     "mcpServers": {
+       "google_workspace": {
+         "description": "Gmail, Drive, Docs, Sheets, Slides, Calendar (container)",
+         "url": "http://workspace_mcp:8889/mcp",
+         "type": "streamable-http"
+       }
+     }
+   }
+   ```
+
+See [docker/workspace-mcp/README.md](../../docker/workspace-mcp/README.md) for details.
+
+### Option 2b: Remote HTTP (server on host)
+
+Run the Workspace MCP server on the host, then add the remote server from the **Settings page**:
+
+1. **On the host** — start the server:
+   ```bash
+   ./scripts/setup/run_workspace_mcp.sh
+   ```
+   Or: set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`, then run `uvx workspace-mcp --transport streamable-http`. Default port 8889; server listens on `http://localhost:8889/mcp`.
+
+2. **Add the server in Agent Zero** — **Settings → MCP/A2A → External MCP Servers → Open**. Use:
+   ```json
+   {
+     "mcpServers": {
+       "google_workspace": {
+         "description": "Gmail, Drive, Docs, Sheets, Slides, Calendar (remote)",
+         "url": "http://host.docker.internal:8889/mcp",
+         "type": "streamable-http"
+       }
+     }
+   }
+   ```
+   Use `host.docker.internal` (macOS/Windows) or the host IP (Linux). Optional: run `./scripts/setup/add_workspace_mcp_remote.sh` to insert this server into settings automatically.
+
+Details, OAuth 2.1 multi-user, and CLI checks: [workspacemcp.com Quick Start](https://workspacemcp.com/quick-start).
+
 ## Docker Networking
 
 If Agent Zero runs in Docker and your MCP server runs on the host:
@@ -107,10 +196,11 @@ For detailed configuration options, server types, environment variables, and tro
 
 Community-tested and reliable MCP servers:
 
+- **Google Workspace MCP** - Gmail, Drive, Docs, Sheets, Slides, Calendar, Tasks (see [Google Workspace MCP](#google-workspace-mcp-full-workspace) above)
 - **Chrome DevTools MCP** - Direct Chrome control
 - **Playwright MCP** - Cross-browser automation
 - **n8n MCP** - Workflow automation
-- **Gmail MCP** - Email management
+- **Gmail MCP** - Email-only alternatives
 - **VSCode MCP** - IDE workflows
 
 > [!TIP]

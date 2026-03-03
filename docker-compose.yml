@@ -12,11 +12,11 @@ services:
     environment:
       # Claude Code config directory - persists OAuth credentials
       - CLAUDE_CONFIG_DIR=/home/claude/.claude
-      # Serve HTTP only (no HTTPS): set to 1 to avoid self-signed cert issues for MCP/A2A. Use http:// in client URLs.
+      # Serve HTTP only: set to 1 to avoid self-signed cert. Unset = HTTPS (enables browser microphone from any host).
       - AGENT_ZERO_HTTP_ONLY=1
-      # For remote MCP/A2A with HTTPS: add host LAN IP to TLS cert (ignore if using AGENT_ZERO_HTTP_ONLY=1)
-      - AGENT_ZERO_CERT_IPS=192.168.50.7
-      # Uncomment below once to regenerate cert with the IP above after first deploy, then remove to avoid regenerating every start
+      # HTTP mode: in-app Flare (Cloudflare) tunnel works; use http:// for Web UI, MCP, A2A. For browser mic use http://localhost:8888 on same machine.
+      # - AGENT_ZERO_CERT_IPS=192.168.50.7
+      # Uncomment once to regenerate cert with the IP above, then comment out again
       # - AGENT_ZERO_REGENERATE_CERT=1
     ports:
       - "${HOST_PORT:-8888}:80"  # Web UI accessible on port 8888
@@ -44,6 +44,8 @@ services:
       - ./claude-keyring:/home/claude/.local/share/python_keyring
       # Persist gnome-keyring data
       - ./claude-gnome-keyring:/home/claude/.local/share/keyrings
+      # Persist Playwright browser binaries so they survive container recreates
+      - ./playwright-browsers:/root/.cache/ms-playwright
     # Network configuration for LAN access and security scanning
     # CURRENT: Bridge mode with capabilities - Port 8888 maintained, allows network scanning
     # Option 1: Use host network mode (full access to host network)
@@ -65,6 +67,13 @@ services:
       # - "nas:192.168.50.5"
       # - "my-server:192.168.50.10"
       # - "router:192.168.50.1"
+    # Connect to Archon's Docker network so agent-zero can reach archon-mcp by container name
+    # without routing through the host port proxy (which is fragile on Docker Desktop).
+    # The default agentz_default network is kept automatically by compose; archon_app-network
+    # is the external network created by the Archon stack.
+    networks:
+      - default
+      - archon_app-network
     restart: unless-stopped
     # Shared memory for Chromium/Playwright (default 64MB is small; larger shm improves browser responsiveness)
     shm_size: '512mb'
@@ -85,3 +94,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s    # App often ready in 20–30s; /health makes healthy sooner
+
+  # Google Workspace MCP (Gmail, Drive, Docs, Sheets, Calendar, etc.). Agent Zero connects at http://workspace_mcp:8889/mcp.
+  # First-time OAuth: run ./scripts/setup/run_workspace_mcp.sh on the host once, then copy ~/.google_workspace_mcp to ./workspace-mcp-credentials.
+  workspace_mcp:
+    build:
+      context: .
+      dockerfile: docker/workspace-mcp/Dockerfile
+    image: agent-zero-workspace-mcp:local
+    container_name: workspace_mcp
+    env_file:
+      - .env
+    environment:
+      - WORKSPACE_MCP_PORT=8889
+    volumes:
+      - ./workspace-mcp-credentials:/root/.google_workspace_mcp
+    expose:
+      - "8889"
+    networks:
+      - default
+    restart: unless-stopped
+
+# External networks: archon_app-network is managed by the Archon docker-compose stack.
+# It must be running (docker compose up) before agent-zero starts, or agent-zero will
+# fail to join the network. If Archon is not deployed, comment out the networks block
+# and the networks entry under agent-zero.
+networks:
+  archon_app-network:
+    external: true

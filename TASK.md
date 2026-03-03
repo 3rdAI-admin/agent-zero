@@ -8,6 +8,7 @@
 - **Status:** `scripts/show_status.sh` prints container, health, Web UI, VNC, **Settings** (chat/util/browser from container), access URLs; `startup.sh` calls it at end; `MODELS.sh --status` runs same output.
 - **Ollama repetition fix (RESPONSES.md follow-ups):** `scripts/ollama_create_modelfiles.sh` for glm-4.7-flash:32k (num_ctx 32768); presets ollama_glm, ollama_mixed, ollama_glm_claude use `glm-4.7-flash:32k` and per-preset kwargs (GLM frequency_penalty 1.45, ollama_claude 1.1, ollama_qwen3 temp 0.3). `agent.py`: LoopData.MAX_ITERATIONS=20, within-stream repetition detection (250-char block 3×), stream_repeat_detected handling.
 - **Handoff:** `RESPONSES.md` — Claude ↔ Cursor coordination; Ollama section status set to "Cursor follow-up tasks complete".
+- **IMPROVE.md #0 (ipython):** Added `ipython>=8.0.0` to `requirements.txt`; `code_execution_tool.execute_python_code` uses `shutil.which("ipython") or "python3"` so runtime works without ipython until image rebuild. IMPROVE.md updated: "For Claude (Cursor update)" section, #0 marked fixed, priority order #1 struck through.
 
 ### 2026-02-20: Agent Zero for ZeroClaw Integrators doc
 - Created `docs/AGENT_ZERO_FOR_ZEROCLAW_INTEGRATORS.md`: entrypoints (REST /api_message, MCP SSE/HTTP, A2A), auth (X-API-KEY), example requests, constraints (rate limits, context lifetime 24h)
@@ -56,7 +57,34 @@
 - P5 E2E: Docker rebuild, validate.sh 9/9 phases passed (container healthy)
 - Bug fix: restored `send_file`/`session` re-exports in `python/helpers/api.py` (lost in commit 54c51a0)
 
+### 2026-03-03: Fix xvfb/X11 crash loop in Agent Zero container
+- **Root cause:** Stale `/tmp/.X99-lock` on restart caused Xvfb to exit 1 in a loop; autocutsel `-fork` flag caused immediate daemonize (supervisor sees crash); no `startretries`/`startsecs` on dependent services; event listener killed the entire container on any FATAL state.
+- **Fix 1 — start_xvfb.sh wrapper:** New `/exe/start_xvfb.sh` cleans up stale X lock files before exec-ing Xvfb.
+- **Fix 2 — vnc.conf:** Added `startsecs=0`, `startretries=10` to fluxbox/x11vnc/autocutsel so they retry gracefully instead of going FATAL. Removed `-fork` from autocutsel. Added `1MB` log rotation caps.
+- **Fix 3 — supervisor_event_listener.py:** Added `NON_ESSENTIAL_PROCESSES` set; X11/VNC FATAL states are logged as warnings but no longer kill supervisord.
+- **Fix 4 — Dockerfiles:** Both `Dockerfile` and `docker/run/Dockerfile` updated to `chmod +x /exe/start_xvfb.sh`.
+- **Verified:** Live-tested in running container — full stop/start cycles, Xvfb kill recovery, all services stable.
+
+### 2026-03-03: Fix MCP Archon server timeout on Agent Zero startup
+- **Root causes (3):**
+  1. **Protocol mismatch:** `.mcp.json` used `"transport": "http"` but Agent Zero's `mcp_handler.py` only recognized `"type"` field and didn't map `"transport"`. The `type` defaulted to `"sse"`, so the SSE client was used against Archon's Streamable HTTP server.
+  2. **Network isolation:** `agent-zero` (agentz_default, 172.18.x) and `archon-mcp` (archon_app-network, 172.22.x) were on different Docker networks. Traffic via host IP (192.168.50.7) went through Docker Desktop port proxy, which was unreliable.
+  3. **Dead `archon-local` entry:** `127.0.0.1:8051` never works for cross-container communication.
+- **Fix 1 — `.mcp.json`:** Changed URL from `192.168.50.7` to Docker DNS name `archon-mcp`, set `type: "streamable-http"`, added per-server `init_timeout: 30` / `tool_timeout: 120`, removed dead `archon-local` entry.
+- **Fix 2 — `docker-compose.yml`:** Added `archon_app-network` (external) so agent-zero joins Archon's network on every start; documented dependency.
+- **Fix 3 — `mcp_handler.py`:** `_determine_server_type()` now checks `transport` key (Claude Desktop config format). Added `_normalize_transport_to_type()` to map `"http"` to `"streamable-http"`. `MCPServerRemote.update()` now accepts `transport` and remaps it to `type`. `_is_streaming_http_type()` now recognizes bare `"http"`.
+- **Fix 4 — `settings.py`:** Increased `mcp_client_init_timeout` default from 10s to 30s.
+- **Verified:** `curl` from inside agent-zero to `http://archon-mcp:8051/mcp` returns HTTP 200 with proper MCP response.
+
 ## In Progress
+
+(none)
+
+## Completed: Google Workspace MCP container and docs (2026-03-03)
+
+- **Container:** Docker service `workspace_mcp` (container name `workspace_mcp`), port 8889, streamable-http; Agent Zero connects at `http://workspace_mcp:8889/mcp`.
+- **Docs:** `docker/workspace-mcp/README.md`, `docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md`, `docs/guides/mcp-setup.md` (Option 2a/2b), `QUICK_REFERENCE.md`, `docs/DOCUMENTATION_INDEX.md`; Web UI examples and scripts/setup/README updated.
+- **Archon:** If tracking in Archon, mark task done with: `python scripts/archon_api_tasks.py update <TASK_ID> --status done --description "Google Workspace MCP container + docs"`.
 
 ## Upcoming — ZeroClaw Integration (PRP-aligned)
 
@@ -94,6 +122,21 @@ Source: `PRPs/zeroclaw-integration-analysis.md` (Revised 2026-02-20)
 - Add explicit port note to `docs/NATIVE_INSTALLATION.md` (native uses 8000 vs Docker 8888)
 - Review `docs/CLAUDE_CODE_INTEGRATION.md` for `install_security_tools.sh` vs `install_owasp_tools.sh` naming
 - ~~Sync Archon tasks with PRP phases~~ (done via direct psql — MCP was down, synced via Supabase DB)
+
+### Action items from IMPROVE.md
+
+See **IMPROVE.md** → "Action items (suggested improvements)" for full list. Summary of open items:
+
+- [ ] **#2** — WebSocket auth: log "session not valid" at DEBUG or rate-limit (avoid WARNING spam)
+- [ ] **#3** — OAuth: add `/.well-known/oauth-authorization-server` or document 404 expected
+- [ ] **#4** — MCP SSE: document GET-only; optional 405 with `Allow: GET`
+- [x] **#5** — Deprecations: pathspec → gitignore (file_tree, backup), litellm>=1.82.0; faiss/numpy upstream
+- [ ] **#6** — Log structure: structured logging or separate app vs HTTP streams
+- [ ] **#8** — code_execution: verify Drive knowledge recall; buffer/validate complete code
+- [ ] **#11** — LiteLLM: upgrade; monitor unawaited coroutine
+- [ ] **#12** — Playwright: document/automate `playwright install chromium` after pip upgrade
+- [ ] **Monitor** — Verify health filter in image; Google API in main venv or document project venv
+- [ ] **Knowledge** — Extend google_apis.md pattern to other tools/MCP/scripts
 
 ## Discovered During Work
 

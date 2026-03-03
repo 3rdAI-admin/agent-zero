@@ -10,6 +10,7 @@
           <div class="section-title">External MCP Servers</div>
           <div class="section-description">
             Agent Zero can use external MCP servers, local or remote as tools.
+            To add <strong>Google Workspace</strong> (Gmail, Drive, Docs, Sheets, Calendar): if using Docker Compose, the <code>workspace_mcp</code> service can run in the stack — use <code>url: "http://workspace_mcp:8889/mcp"</code> and <code>type: "streamable-http"</code>. Or run it on the host with <code>./scripts/setup/run_workspace_mcp.sh</code> and use <code>url: "http://host.docker.internal:8889/mcp"</code>. See <strong>Examples</strong> in the config modal for a copy-paste snippet.
           </div>
 
           <div class="field">

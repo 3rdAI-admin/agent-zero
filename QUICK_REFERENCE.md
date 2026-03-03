@@ -13,9 +13,20 @@
 - `./restart.sh` - Restart container and wait for `/health` (use after MODELS.sh or .env change).
 - `./scripts/show_status.sh` - Container, health, Web UI, VNC, Settings (chat/util/browser), access URLs.
 
+### Archon task sync (REST API)
+- **`ARCHON_API_URL`** — Optional; default `http://localhost:8181`. Archon must be running (e.g. `./start_all.sh --archon`).
+- `python scripts/archon_api_tasks.py list` — List all tasks.
+- `python scripts/archon_api_tasks.py list --project-id 610ae854-2244-4cb8-a291-1e31561377ab` — List A0 SIP project tasks.
+- `python scripts/archon_api_tasks.py create --project-id UUID --title "..." [--description "..." [--feature "..."]]` — Create a task.
+- `python scripts/archon_api_tasks.py update TASK_ID --status done [--description "..."]` — Update a task (status: todo | doing | review | done).
+
 ### Testing & Validation
 - `./scripts/testing/validate.sh` - Run validation
 - `./scripts/testing/test_claude_integration.sh` - Test Claude integration
+
+### Google Workspace MCP (container)
+- **Service:** `workspace_mcp` — Gmail, Drive, Docs, Sheets, Calendar. URL: `http://workspace_mcp:8889/mcp`, type: `streamable-http`.
+- **First-time:** Run `./scripts/setup/run_workspace_mcp.sh` on host once for OAuth, then `cp -r ~/.google_workspace_mcp/* workspace-mcp-credentials/` and `docker compose up -d`. See [docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md](docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md).
 
 ### Health
 - **`GET /health`** - No-auth health check (200 OK). Used by Docker healthcheck and `restart.sh`; avoids 302s from unauthenticated curl.
@@ -56,6 +67,8 @@ ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 
 - **HTTP mode** (`AGENT_ZERO_HTTP_ONLY=1`): Use `http://<host>:8888` for Web UI, MCP, and A2A. No certificate or Cursor launcher needed.
 - **HTTPS mode** (env unset): Use `https://<host>:8888`. For remote MCP/A2A, add your LAN IP to `AGENT_ZERO_CERT_IPS` and optionally run `./scripts/setup/trust_agent_zero_cert.sh` and start Cursor with `./scripts/setup/cursor_with_agent_zero_cert.sh`. See [docs/MCP_CURSOR_REMEDIATION.md](docs/MCP_CURSOR_REMEDIATION.md).
+- **Browser microphone:** Browsers allow microphone only in secure contexts (HTTPS or **http://localhost**). If you open the Web UI at `http://<LAN-IP>:8888`, the mic will be blocked. Use **http://localhost:8888** on the same machine, or enable HTTPS (comment out `AGENT_ZERO_HTTP_ONLY=1` in docker-compose) and run **`docker compose up -d --force-recreate agent-zero`** so the container gets the new env, then open **https://&lt;host&gt;:8888** (accept the self-signed cert once).
+- **Cloudflare (Flare) tunnel:** Works when the app is in **HTTP** mode: the tunnel connects to `http://localhost:80` inside the container. If you enable HTTPS, the app serves TLS on port 80, so the built-in Flare tunnel (flaredantic) will fail to connect unless the tunnel code is updated to use an HTTPS origin with `noTLSVerify` (not currently supported by flaredantic). For remote access with HTTPS enabled, use a **separate** cloudflared run (e.g. `cloudflared tunnel --url https://localhost:80 --no-tls-verify`) or keep HTTP mode and use the in-app Flare tunnel.
 
 ## Settings Persistence
 

@@ -13,6 +13,7 @@
 - **[Native Installation](./NATIVE_INSTALLATION.md)** - Installation without Docker (native Kali, port 8000)
 - **[Complete Setup Guide](./COMPLETE_SETUP_GUIDE.md)** - Full feature setup (VNC, Claude Code, Security)
 - **[Google Account & Gmail Setup](./setup/GOOGLE_ACCOUNT_SETUP.md)** - Google Gemini API key and Gmail (email) credentials; persistence of settings
+- **[Google Workspace MCP container](./setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md)** - Containerized Gmail/Drive/Docs/Sheets/Calendar MCP; service `workspace_mcp`, URL `http://workspace_mcp:8889/mcp`
 
 ### Features & Integration
 - **[VNC Desktop Access](./VNC_ACCESS.md)** - GUI environment setup and usage
@@ -66,6 +67,7 @@
 - **Run security scans**: [Security Setup](./guides/SECURITY_SETUP.md)
 - **Follow pen test ROE (Agent Zero / Archon)**: [Penetration Testing ROE](./guides/PEN_TESTING_ROE.md)
 - **Connect remotely (API/MCP/A2A)**: [Connectivity](./connectivity.md)
+- **Use Google Workspace MCP (Gmail, Drive, etc.) in Docker**: [Google Workspace MCP container](./setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md) · [MCP Setup](./guides/mcp-setup.md)
 - **Integrate ZeroClaw with Agent Zero**: [Agent Zero for ZeroClaw Integrators](./AGENT_ZERO_FOR_ZEROCLAW_INTEGRATORS.md)
 - **MCP in Cursor (HTTP/HTTPS, cert fix)**: [MCP Cursor Remediation](./MCP_CURSOR_REMEDIATION.md) · [MCP Client Connection](./MCP_CLIENT_CONNECTION.md)
 - **Troubleshoot issues**: [Troubleshooting](./troubleshooting.md)
