@@ -43,8 +43,8 @@ def load_plugin_variables(
 
         classes = extract_tools.load_classes_from_file(
             plugin_file,
-            VariablesPlugin,
-            one_per_file=False,  # type: ignore[type-abstract]
+            VariablesPlugin,  # type: ignore[type-abstract]
+            one_per_file=False,
         )
         for cls in classes:
             return cls().get_variables(file, backup_dirs, **kwargs)  # type: ignore[abstract]  # abstract class here is ok, it is always a subclass
