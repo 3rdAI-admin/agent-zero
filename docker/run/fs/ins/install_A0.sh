@@ -43,6 +43,9 @@ uv pip install --no-build-isolation -r /git/agent-zero/requirements.txt
 # override for packages that have unnecessarily strict dependencies
 uv pip install -r /git/agent-zero/requirements2.txt
 
+# Upgrade pip to address Dependabot GHSA-4xh5-x5gv-qwph, GHSA-6vgw-5pg2-w6jp (pip 25.3+ / 26.0+)
+uv pip install 'pip>=26.0'
+
 # install playwright
 bash /ins/install_playwright.sh "$@"
 

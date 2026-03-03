@@ -17,13 +17,13 @@ langchain-core==0.3.81
 langchain-community==0.3.27
 langchain-unstructured[all-docs]==0.1.6
 openai-whisper==20250625
-lxml_html_clean==0.3.1
+lxml_html_clean>=0.4.0
 markdown==3.7
 mcp>=1.23.1
 newspaper3k==0.2.8
 paramiko==3.5.0
 playwright==1.52.0
-pypdf==6.7.3
+pypdf>=6.7.4
 python-dotenv==1.1.0
 pytz==2024.2
 sentence-transformers==3.0.1
@@ -51,3 +51,8 @@ pywinpty==3.0.2; sys_platform == "win32"
 python-socketio>=5.14.2
 uvicorn>=0.38.0
 wsproto>=1.2.0
+
+# Security: pin transitive deps with known CVEs (Dependabot)
+urllib3>=2.6.3
+filelock>=3.20.3
+# diskcache CVE-2025-69872: no fix released yet; monitor for 5.6.4+
