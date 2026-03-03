@@ -23,5 +23,21 @@ echo "Restarting agent-zero..."
 "${COMPOSE[@]}" restart agent-zero
 
 echo ""
-echo "Done. Wait for health (e.g. docker compose ps), then:"
-echo "  - Web UI: http://localhost:${HOST_PORT:-8888}"
+echo "Waiting for Web UI to respond (up to 90s)..."
+PORT="${HOST_PORT:-8888}"
+MAX_WAIT=90
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    if curl -fsS -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/health" 2>/dev/null | grep -qE '^[23]'; then
+        echo "Web UI ready after ${ELAPSED}s."
+        break
+    fi
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+done
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+    echo "Timeout waiting for UI. Check: docker compose ps"
+fi
+
+echo ""
+echo "Done. Web UI: http://localhost:${PORT}"

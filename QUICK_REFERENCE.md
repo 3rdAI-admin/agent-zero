@@ -3,17 +3,22 @@
 ## Common Scripts
 
 ### Setup & Configuration
-- `./scripts/setup/startup.sh` - Start Agent Zero
+- `./startup.sh` - Start Agent Zero (GitHub check, graceful stop, start, health wait, status + settings)
 - `./scripts/setup/configure_mcp_token.sh` - Configure MCP token
 - `./scripts/setup/setup_claude_oauth.sh` - Setup Claude OAuth
+
+### Model Presets & Status
+- `./MODELS.sh <preset>` - Switch model preset (e.g. `ollama`, `ollama-dual`, `ollama-glm-claude`). Use `A0_USR_PATH=/path/to/volume ./MODELS.sh ollama` to write to volume.
+- `./MODELS.sh --status` - Show container status and current model settings (same as end of startup).
+- `./restart.sh` - Restart container and wait for `/health` (use after MODELS.sh or .env change).
+- `./scripts/show_status.sh` - Container, health, Web UI, VNC, Settings (chat/util/browser), access URLs.
 
 ### Testing & Validation
 - `./scripts/testing/validate.sh` - Run validation
 - `./scripts/testing/test_claude_integration.sh` - Test Claude integration
 
-### Via Symlinks (Convenience)
-- `./startup.sh` → `scripts/setup/startup.sh`
-- `./validate.sh` → `scripts/testing/validate.sh`
+### Health
+- **`GET /health`** - No-auth health check (200 OK). Used by Docker healthcheck and `restart.sh`; avoids 302s from unauthenticated curl.
 
 ## Documentation
 
@@ -64,6 +69,8 @@ ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 
 ## See Also
 
+- `RESPONSES.md` - Claude ↔ Cursor handoff (decisions, implemented, remediations)
+- `A0_OLLAMA.md` - Ollama presets, GLM :32k, MODELS.sh --status
 - `MIGRATION_GUIDE.md` - Full migration guide
 - `scripts/README.md` - Scripts directory guide
 - `docs/README.md` - Documentation guide

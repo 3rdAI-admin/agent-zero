@@ -66,6 +66,10 @@ services:
       # - "my-server:192.168.50.10"
       # - "router:192.168.50.1"
     restart: unless-stopped
+    # Shared memory for Chromium/Playwright (default 64MB is small; larger shm improves browser responsiveness)
+    shm_size: '512mb'
+    # Total memory+swap = 16G (same as memory limit) so container cannot use extra swap — predictable response under memory pressure
+    memswap_limit: 16g
     # Resource limits - set to 16GB for better responsiveness; Docker Desktop must allow at least this much
     deploy:
       resources:
@@ -73,11 +77,11 @@ services:
           memory: 16G     # Max memory (increase if host has more and agent is still slow)
           cpus: '4.0'     # Max CPU cores
         reservations:
-          memory: 8G      # Guaranteed RAM (reduces swapping; increase if agent is slow)
-          cpus: '2.0'     # Guaranteed CPU
+          memory: 10G       # Guaranteed RAM for more consistent latency (was 8G)
+          cpus: '3.0'       # Guaranteed CPU (was 2.0)
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost"]
+      test: ["CMD", "curl", "-fsS", "http://localhost/health"]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s    # App often ready in 20–30s; /health makes healthy sooner

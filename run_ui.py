@@ -214,6 +214,12 @@ async def logout_handler():
     return redirect(url_for('login_handler'))
 
 
+# Health check: no auth so Docker/scripts get 200 instead of 302
+@webapp.route("/health", methods=["GET"])
+def health():
+    return Response("ok", status=200, mimetype="text/plain")
+
+
 # handle default address, load index
 @webapp.route("/", methods=["GET"])
 @requires_auth

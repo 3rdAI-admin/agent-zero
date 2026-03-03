@@ -12,6 +12,30 @@ import json
 import os
 import sys
 
+# Shared Ollama kwargs for each model role.
+# Uses OpenAI-compatible param names that LiteLLM maps to Ollama equivalents:
+#   temperature       -> temperature       (direct)
+#   top_p             -> top_p             (direct)
+#   frequency_penalty -> repeat_penalty    (mapped by OllamaChatConfig.map_openai_params)
+#   max_tokens        -> num_predict       (mapped by OllamaChatConfig.map_openai_params)
+# Note: num_ctx has no OpenAI equivalent; set via Ollama Modelfile if needed.
+_OLLAMA_CHAT_KWARGS: dict = {
+    "temperature": 0.4,          # Up from 0.1; reduces deterministic repetition loops
+    "frequency_penalty": 1.3,    # -> repeat_penalty 1.3; penalize repeated tokens
+    "max_tokens": 4096,          # -> num_predict 4096; cap output per response
+    "top_p": 0.9,                # Nucleus sampling for diversity
+}
+_OLLAMA_BROWSER_KWARGS: dict = {
+    "temperature": 0.2,          # Lower for structured browser extraction
+    "frequency_penalty": 1.3,    # -> repeat_penalty 1.3
+    "max_tokens": 4096,          # -> num_predict 4096
+}
+_OLLAMA_UTIL_KWARGS: dict = {
+    "temperature": 0.2,          # Low for deterministic utility tasks
+    "frequency_penalty": 1.2,    # -> repeat_penalty 1.2; lighter for utility
+    "max_tokens": 2048,          # -> num_predict 2048; utility responses shorter
+}
+
 # Presets: provider, model name, api_base (empty = use provider default from model_providers.yaml)
 PRESETS = {
     "anthropic": {
@@ -52,16 +76,142 @@ PRESETS = {
         "browser_model_name": "mistral-31-24b",
         "browser_model_api_base": "https://llm.agent-zero.ai/v1",
     },
+    "deepseek": {
+        "chat_model_provider": "deepseek",
+        "chat_model_name": "deepseek-chat",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 64000,
+        "chat_model_vision": False,
+        "util_model_provider": "ollama",
+        "util_model_name": "gemma3:1b",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "qwen2.5:latest",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+    },
     "ollama": {
         "chat_model_provider": "ollama",
         "chat_model_name": "qwen2.5:latest",
         "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
         "util_model_provider": "ollama",
-        "util_model_name": "qwen2.5:latest",
+        "util_model_name": "gemma3:1b",
         "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
         "browser_model_provider": "ollama",
         "browser_model_name": "qwen2.5:latest",
         "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+    },
+    "ollama_dual": {
+        # .7 = local, .10 = remote: chat/browser on local (low latency), utility on remote (offload background work)
+        "chat_model_provider": "ollama",
+        "chat_model_name": "qwen2.5:latest",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
+        "util_model_provider": "ollama",
+        "util_model_name": "gemma3:1b",
+        "util_model_api_base": "http://192.168.50.10:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "qwen2.5:latest",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+    },
+    "ollama_glm": {
+        # GLM-4.7-Flash 30B MoE (~3B active). Use :32k for VRAM savings (run scripts/ollama_create_modelfiles.sh on Ollama server first).
+        "chat_model_provider": "ollama",
+        "chat_model_name": "glm-4.7-flash:32k",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},  # GLM: stronger penalty to reduce loops
+        "util_model_provider": "ollama",
+        "util_model_name": "gpt-oss:20b",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "glm-4.7-flash:32k",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45},
+    },
+    "ollama_qwen3": {
+        # Qwen3-Coder 30B MoE: agentic-trained; slightly higher temp for diversity
+        # Requires: ollama pull qwen3-coder:30b
+        "chat_model_provider": "ollama",
+        "chat_model_name": "qwen3-coder:30b",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "temperature": 0.3},
+        "util_model_provider": "ollama",
+        "util_model_name": "gpt-oss:20b",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "qwen3-coder:30b",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+    },
+    "ollama_mixed": {
+        # Best-of-breed: GLM chat (reasoning), Devstral browser (384K ctx, vision), GPT-OSS utility (fast)
+        # Requires: ollama pull devstral-small-2; GLM :32k via scripts/ollama_create_modelfiles.sh
+        "chat_model_provider": "ollama",
+        "chat_model_name": "glm-4.7-flash:32k",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},
+        "util_model_provider": "ollama",
+        "util_model_name": "gpt-oss:20b",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "devstral-small-2",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+    },
+    "ollama_claude": {
+        # Claude Opus 4.5 distilled into Qwen3-14B (TeichAI): dense model, lighter repeat penalty
+        # Requires: ollama pull bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning
+        "chat_model_provider": "ollama",
+        "chat_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
+        "util_model_provider": "ollama",
+        "util_model_name": "gpt-oss:20b",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "frequency_penalty": 1.1},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.1},
+    },
+    "ollama_glm_claude": {
+        # Hybrid: GLM-4.7-Flash chat/browser + Claude-distilled utility. GLM :32k via scripts/ollama_create_modelfiles.sh
+        "chat_model_provider": "ollama",
+        "chat_model_name": "glm-4.7-flash:32k",
+        "chat_model_api_base": "http://192.168.50.7:11434",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},
+        "util_model_provider": "ollama",
+        "util_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
+        "util_model_api_base": "http://192.168.50.7:11434",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "frequency_penalty": 1.1},
+        "browser_model_provider": "ollama",
+        "browser_model_name": "glm-4.7-flash:32k",
+        "browser_model_api_base": "http://192.168.50.7:11434",
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45},
     },
 }
 
@@ -81,10 +231,11 @@ def get_settings_path():
 
 def main():
     raw = sys.argv[1].lower() if len(sys.argv) >= 2 else ""
-    preset_name = "agent_zero" if raw in ("agent-zero", "agent_zero") else raw
+    # Normalize hyphenated preset names to underscore keys
+    preset_name = raw.replace("-", "_")
     if len(sys.argv) < 2 or preset_name not in PRESETS:
         print(
-            "Usage: switch_model_preset.py <anthropic|venice|agent-zero|ollama> [--test-llm]",
+            "Usage: switch_model_preset.py <preset> [--test-llm]  (presets: anthropic venice agent-zero deepseek ollama ollama-dual ollama-glm ollama-qwen3 ollama-mixed ollama-claude ollama-glm-claude)",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -119,7 +270,7 @@ def main():
     print(f"Applied preset: {preset_name}")
     print(f"Settings file: {settings_path}")
 
-    # Verify: confirm file on disk has preset, then load via app's settings module
+    # Verify: confirm the file we wrote has the preset (this is the source of truth when A0_USR_PATH is set)
     verify_ok = False
     try:
         with open(settings_path, "r", encoding="utf-8") as f:
@@ -130,22 +281,25 @@ def main():
             for k in preset:
                 if on_disk.get(k) != preset[k]:
                     print(f"  {k}: expected {preset[k]!r}, on disk {on_disk.get(k)!r}")
-        from python.helpers import settings as settings_helper
-
-        settings_helper.reload_settings()
-        s = settings_helper.get_settings()
-        errors = []
-        for key, expected in preset.items():
-            actual = s.get(key)
-            if actual != expected:
-                errors.append(f"  {key}: expected {expected!r}, got {actual!r}")
-        if errors:
-            print("Verification issues (values may have been normalized):")
-            for e in errors:
-                print(e)
         else:
             verify_ok = True
-            print("Verification: settings load and match preset.")
+            print("Verification: settings file matches preset.")
+        # When A0_USR_PATH is set we wrote to the volume; app's settings module reads repo path, so skip that check
+        if not os.environ.get("A0_USR_PATH"):
+            from python.helpers import settings as settings_helper
+            settings_helper.reload_settings()
+            s = settings_helper.get_settings()
+            errors = []
+            for key, expected in preset.items():
+                actual = s.get(key)
+                if actual != expected:
+                    errors.append(f"  {key}: expected {expected!r}, got {actual!r}")
+            if errors:
+                print("Load check (repo path): mismatch —", errors[0] if errors else "")
+            elif not disk_ok:
+                pass
+            else:
+                print("Verification: settings load and match preset.")
     except Exception as e:
         print(f"Verification (load): {e}")
 

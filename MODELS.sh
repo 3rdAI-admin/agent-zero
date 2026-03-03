@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Switch Agent Zero model settings between Anthropic, Venice.ai, Agent Zero API, or Ollama.
-# Usage: ./MODELS.sh <anthropic|venice|agent-zero|ollama> [--test-llm]
+# Switch Agent Zero model settings between Anthropic, Venice.ai, Agent Zero API, DeepSeek, or Ollama.
+# Usage: ./MODELS.sh <preset> [--test-llm]  or  ./MODELS.sh --status
 #   --test-llm  Optional: run a minimal LLM call to confirm the model responds.
 #
 # Agent Zero API (agent-zero) preset – confirmed working:
@@ -33,27 +33,44 @@ if [[ ! -f "$REPO_ROOT/scripts/switch_model_preset.py" ]]; then
   exit 2
 fi
 
+# --status: show same status as startup.sh (container, health, settings, access)
+if [[ "${1:-}" == "--status" ]]; then
+  exec "$REPO_ROOT/scripts/show_status.sh"
+fi
+
 PRESET="${1:-}"
 if [[ -z "$PRESET" ]]; then
-  echo "Usage: $0 <anthropic|venice|agent-zero|ollama> [--test-llm]"
+  echo "Usage: $0 <preset> [--test-llm]"
   echo ""
   echo "Presets:"
-  echo "  anthropic   Chat/Utility/Browser -> Anthropic (Claude)"
-  echo "  venice      Chat/Utility/Browser -> Venice.ai direct (mistral-31-24b, qwen3-4b)"
-  echo "  agent-zero  Chat/Utility/Browser -> Agent Zero API (llm.agent-zero.ai/v1, mistral-31-24b, qwen3-4b, temp 0.2)"
-  echo "  ollama      Chat/Utility/Browser -> Ollama (qwen2.5:latest, 192.168.50.7:11434)"
+  echo "  anthropic    Chat/Utility/Browser -> Anthropic (Claude)"
+  echo "  venice       Chat/Utility/Browser -> Venice.ai direct (mistral-31-24b, qwen3-4b)"
+  echo "  agent-zero   Chat/Utility/Browser -> Agent Zero API (llm.agent-zero.ai/v1, mistral-31-24b, qwen3-4b, temp 0.2)"
+  echo "  deepseek     Chat -> DeepSeek (deepseek-chat), Utility/Browser -> Ollama (gemma3:1b, qwen2.5:latest)"
+  echo "  ollama       Chat/Utility/Browser -> Ollama (qwen2.5:latest chat, gemma3:1b utility, 192.168.50.7:11434)"
+  echo "  ollama-dual  Chat/Browser on .7, Utility on .10 (two Ollama hosts for better throughput)"
+  echo "  ollama-glm   Chat/Browser -> GLM-4.7-Flash (30B MoE, 73.8% SWE-bench), Utility -> gpt-oss:20b"
+  echo "  ollama-qwen3 Chat/Browser -> Qwen3-Coder:30b (30B MoE, agentic-trained), Utility -> gpt-oss:20b"
+  echo "  ollama-mixed  Chat -> GLM-4.7-Flash, Browser -> devstral-small-2 (384K, vision), Utility -> gpt-oss:20b"
+  echo "  ollama-claude Chat/Browser -> Qwen3-14B Claude Opus 4.5 distill (9GB), Utility -> gpt-oss:20b"
+  echo "  ollama-glm-claude Chat/Browser -> GLM-4.7-Flash (fast MoE), Utility -> Qwen3-14B Claude distill"
+  echo ""
+  echo "All Ollama presets include anti-repetition kwargs (repeat_penalty 1.3, max_tokens 4096,"
+  echo "temperature 0.4 chat / 0.2 browser+util) via LiteLLM OpenAI-compat param mapping."
   echo ""
   echo "Optional: --test-llm  Run a short LLM call to verify the model responds."
+  echo ""
+  echo "  --status   Show container status and current model settings (same as startup.sh end)."
   exit 2
 fi
 
 PRESET_LOWER="$(echo "$PRESET" | tr '[:upper:]' '[:lower:]')"
-# Normalize agent-zero for Python script (preset key is agent_zero)
-[[ "$PRESET_LOWER" == "agent-zero" ]] && PRESET_LOWER="agent_zero"
+# Normalize for Python script (preset keys use underscores)
+PRESET_LOWER="${PRESET_LOWER//-/_}"
 case "$PRESET_LOWER" in
-  anthropic|venice|agent_zero|ollama) ;;
+  anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_claude|ollama_glm_claude) ;;
   *)
-    echo "Error: preset must be anthropic, venice, agent-zero, or ollama (got: $PRESET)"
+    echo "Error: unknown preset '$PRESET'. Run without arguments to see available presets."
     exit 2
     ;;
 esac
@@ -89,6 +106,7 @@ fi
 echo "Venice.ai     -> set Venice.ai key in Settings → API Keys or API_KEY_VENICE in .env."
 echo "Agent Zero    -> set Agent Zero API key (sk-a0-...) in Settings → API Keys or API_KEY_A0_VENICE."
 echo "Anthropic     -> set API_KEY_ANTHROPIC."
+echo "DeepSeek      -> set API_KEY_DEEPSEEK."
 echo "Ollama        -> ensure Ollama is running at api_base (192.168.50.7:11434)."
 echo "----------------------------------------------"
 if [[ -x "$REPO_ROOT/restart.sh" ]]; then

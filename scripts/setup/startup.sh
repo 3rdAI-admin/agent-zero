@@ -145,8 +145,8 @@ while [ $WAITED -lt $HEALTH_WAIT_MAX ]; do
         ok "Container is healthy."
         break
     fi
-    # Also accept: Web UI responds (in case healthcheck not yet updated)
-    if docker exec "$CONTAINER_NAME" curl -fsS -o /dev/null --max-time 3 http://localhost:80 2>/dev/null; then
+    # Also accept: Web UI /health responds (in case healthcheck not yet updated)
+    if docker exec "$CONTAINER_NAME" curl -fsS -o /dev/null --max-time 3 http://localhost:80/health 2>/dev/null; then
         ok "Web UI responding."
         break
     fi
@@ -161,42 +161,6 @@ if [ $WAITED -ge $HEALTH_WAIT_MAX ]; then
     warn "Check: docker logs $CONTAINER_NAME"
 fi
 
-# ─── 4. Status ───────────────────────────────────────────────────────────
-echo ""
-echo -e "${CYAN}═══════════════════════════════════════${NC}"
-echo -e "${CYAN}Agent Zero – Status${NC}"
-echo -e "${CYAN}═══════════════════════════════════════${NC}"
-echo ""
-
-if ! is_running; then
-    fail "Container is not running."
-    exit 1
-fi
-
-# Container and health
-STATUS=$(docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Status}}" 2>/dev/null || echo "unknown")
-HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "no-healthcheck")
-echo -e "  Container:  ${GREEN}running${NC} ($STATUS)"
-echo -e "  Health:     $([ "$HEALTH_STATUS" = "healthy" ] && echo -e "${GREEN}healthy${NC}" || echo -e "${YELLOW}${HEALTH_STATUS}${NC}")"
-echo ""
-
-# Supervisor services (best-effort)
-if docker exec "$CONTAINER_NAME" supervisorctl status run_ui 2>/dev/null | grep -q "RUNNING"; then
-    echo -e "  Web UI:     ${GREEN}RUNNING${NC}"
-else
-    echo -e "  Web UI:     ${YELLOW}check supervisorctl${NC}"
-fi
-if docker exec "$CONTAINER_NAME" supervisorctl status x11vnc 2>/dev/null | grep -q "RUNNING"; then
-    echo -e "  VNC:        ${GREEN}RUNNING${NC}"
-else
-    echo -e "  VNC:        ${YELLOW}check supervisorctl${NC}"
-fi
-echo ""
-
-# Access
-echo -e "  ${CYAN}Web UI:${NC}     http://localhost:${HOST_PORT}"
-echo -e "  ${CYAN}VNC:${NC}        vnc://localhost:5901"
-echo ""
-echo -e "  Logs:       ${DOCKER_COMPOSE_CMD[*]} logs -f agent-zero"
-echo -e "  Stop:       ${DOCKER_COMPOSE_CMD[*]} down"
-echo ""
+# ─── 4. Status (container, health, settings, access) ─────────────────────
+export CONTAINER_NAME HOST_PORT
+"$REPO_ROOT/scripts/show_status.sh" || exit 1

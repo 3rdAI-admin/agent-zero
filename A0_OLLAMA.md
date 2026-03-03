@@ -59,11 +59,26 @@ The **ollama** preset sets Chat, Utility, and Browser to Ollama with these value
 
 The preset uses **192.168.50.7:11434** as the Ollama host. Ensure Ollama is running on that host and the model is pulled: `ollama pull qwen2.5:latest` (on the Ollama server).
 
+### ollama-dual preset (two Ollama hosts)
+
+If you have **two** Ollama servers — e.g. **.7 = local**, **.10 = remote** — use **ollama-dual** to split load:
+
+| Role    | API base                    | Typical use      |
+|---------|-----------------------------|------------------|
+| Chat    | `http://192.168.50.7:11434`  | Local (low latency for replies) |
+| Utility | `http://192.168.50.10:11434` | Remote (memory, summarization; less latency-sensitive) |
+| Browser | `http://192.168.50.7:11434`  | Local (interactive) |
+
+Chat and Browser stay on local (.7) for snappier responses; Utility runs on remote (.10) so background work doesn’t compete with the local Ollama. Ensure both hosts have the same model (e.g. `qwen2.5:latest`) pulled.
+
 ### Apply the preset
 
 ```bash
-# From repo root (writes repo usr/settings.json)
+# Single host
 ./MODELS.sh ollama
+
+# Two hosts (chat/browser on .7, utility on .10)
+./MODELS.sh ollama-dual
 
 # Optional: verify with a short LLM call
 ./MODELS.sh ollama --test-llm
@@ -75,6 +90,24 @@ If the app runs in Docker and `usr` is a **separate volume**:
 - Or from host: `A0_USR_PATH=/path/to/A0_volume ./MODELS.sh ollama`
 
 Then **restart** the app or container.
+
+**Check status and current settings:** `./MODELS.sh --status` (container, health, Chat/Utility/Browser models and API bases).
+
+### GLM and 32K context (VRAM savings)
+
+Presets **ollama-glm**, **ollama-mixed**, and **ollama-glm-claude** use **`glm-4.7-flash:32k`** (32K context) to reduce VRAM. Create that model on your Ollama server first:
+
+```bash
+# On the Ollama server (e.g. 192.168.50.7):
+./scripts/ollama_create_modelfiles.sh   # prints Modelfile and instructions
+# Or create manually:
+ollama create glm-4.7-flash:32k -f - << 'EOF'
+FROM glm-4.7-flash:latest
+PARAMETER num_ctx 32768
+EOF
+```
+
+All Ollama presets use anti-repetition kwargs (`frequency_penalty`, `max_tokens`, `temperature`) via LiteLLM; see `scripts/switch_model_preset.py` and `RESPONSES.md` (Ollama section) for details.
 
 ### Custom host or port
 

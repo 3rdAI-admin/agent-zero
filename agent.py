@@ -330,6 +330,9 @@ class UserMessage:
 
 
 class LoopData:
+    # Max message-loop iterations per user turn; prevents unbounded monologue loops
+    MAX_ITERATIONS = 20
+
     def __init__(self, **kwargs):
         self.iteration = -1
         self.system = []
@@ -341,6 +344,7 @@ class LoopData:
         self.params_temporary: dict = {}
         self.params_persistent: dict = {}
         self.current_tool = None
+        self.stream_repeat_detected = False  # set by stream callback when repeated block seen
 
         # override values with kwargs
         for key, value in kwargs.items():
@@ -403,6 +407,17 @@ class Agent:
                     self.context.streaming_agent = self  # mark self as current streamer
                     self.loop_data.iteration += 1
                     self.loop_data.params_temporary = {}  # clear temporary params
+                    self.loop_data.stream_repeat_detected = False
+
+                    if self.loop_data.iteration > LoopData.MAX_ITERATIONS:
+                        warning_msg = (
+                            f"Message loop stopped after {LoopData.MAX_ITERATIONS} iterations. "
+                            "Consider rephrasing or breaking the task into smaller steps."
+                        )
+                        self.hist_add_warning(message=warning_msg)
+                        PrintStyle(font_color="orange", padding=True).print(warning_msg)
+                        self.context.log.log(type="warning", content=warning_msg)
+                        break
 
                     # call message_loop_start extensions
                     await self.call_extensions(
@@ -440,6 +455,13 @@ class Agent:
 
                         async def stream_callback(chunk: str, full: str):
                             await self.handle_intervention()
+                            # Within-generation repetition: same block repeated 3+ times in recent output
+                            if len(full) >= 800:
+                                block_len = 250
+                                tail = full[-block_len:]
+                                rest = full[:-block_len]
+                                if rest.count(tail) >= 2:  # tail appears 2 more times = 3 total
+                                    self.loop_data.stream_repeat_detected = True
                             # output the agent response stream
                             if chunk == full:
                                 printer.print("Response: ")  # start of response
@@ -476,7 +498,16 @@ class Agent:
 
                         await self.handle_intervention(agent_response)
 
-                        if (
+                        if self.loop_data.stream_repeat_detected:
+                            # Within-generation repetition detected during streaming
+                            self.hist_add_ai_response(agent_response)
+                            warning_msg = "Repetition detected in this response; stopping to avoid a loop. Try rephrasing or a shorter task."
+                            self.hist_add_warning(message=warning_msg)
+                            PrintStyle(font_color="orange", padding=True).print(
+                                warning_msg
+                            )
+                            self.context.log.log(type="warning", content=warning_msg)
+                        elif (
                             self.loop_data.last_response == agent_response
                         ):  # if assistant_response is the same as last message in history, let him know
                             # Append the assistant's response to the history
