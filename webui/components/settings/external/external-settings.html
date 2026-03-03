@@ -7,6 +7,11 @@
     <div x-data>
       <template x-if="$store.settings">
         <div>
+          <p class="external-services-hint" style="margin-bottom: 0.75rem; font-size: 0.9em; color: var(--color-text-secondary, #888);">
+            To add <strong>external MCP servers</strong> (e.g. Google Workspace, Archon, crawl4ai): open the
+            <a href="#" @click.prevent="$store.settings.switchTab('mcp')" style="text-decoration: underline;">MCP/A2A (Servers)</a>
+            tab above, then click <strong>Open</strong> under External MCP Servers.
+          </p>
           <nav>
             <ul>
               <li>

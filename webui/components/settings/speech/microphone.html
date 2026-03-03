@@ -1,7 +1,7 @@
 <html>
 
 <head>
-    <title>Microhone settings</title>
+    <title>Microphone settings</title>
 
     <!-- Import the alpine store -->
     <script type="module">
@@ -17,6 +17,7 @@
         <template x-if="$store.microphoneSetting">
 
             <div>
+                <p class="text-warning" x-show="$store.microphoneSetting.getInsecureContextMessage()" x-text="$store.microphoneSetting.getInsecureContextMessage()" style="margin-bottom: 0.5rem;"></p>
                 <select x-model="$store.microphoneSetting.selectedDevice"
                     @change="$store.microphoneSetting.onSelectDevice()"
                     x-show="$store.microphoneSetting.devices.length > 0">

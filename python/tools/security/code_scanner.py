@@ -106,7 +106,7 @@ class CodeScanner:
             try:
                 data = json.loads(result.stdout)
                 for result_item in data.get("results", []):
-                    severity = cls.SEVERITY_MAP.get(
+                    item_severity = cls.SEVERITY_MAP.get(
                         result_item.get("extra", {}).get("severity", "INFO"), "info"
                     )
 
@@ -125,7 +125,7 @@ class CodeScanner:
                             file=result_item.get("path", ""),
                             line=result_item.get("start", {}).get("line", 0),
                             column=result_item.get("start", {}).get("col", 0),
-                            severity=severity,
+                            severity=item_severity,
                             rule_id=result_item.get("check_id", ""),
                             message=result_item.get("extra", {}).get("message", ""),
                             code_snippet=result_item.get("extra", {}).get("lines", ""),
@@ -200,7 +200,7 @@ class CodeScanner:
             try:
                 data = json.loads(result.stdout)
                 for result_item in data.get("results", []):
-                    severity = cls.SEVERITY_MAP.get(
+                    item_severity = cls.SEVERITY_MAP.get(
                         result_item.get("issue_severity", "LOW"), "low"
                     )
 
@@ -271,7 +271,7 @@ class CodeScanner:
                             file=result_item.get("filename", ""),
                             line=result_item.get("line_number", 0),
                             column=result_item.get("col_offset", 0),
-                            severity=severity,
+                            severity=item_severity,
                             rule_id=test_id,
                             message=result_item.get("issue_text", ""),
                             code_snippet=result_item.get("code", ""),

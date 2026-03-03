@@ -62,7 +62,23 @@
 - Quick access links functional
 - Documentation structure organized and complete
 
-## Task Update Instructions
+## Updating tasks via Archon REST API
+
+When Archon server is running (e.g. `./start_all.sh --archon`), use the script from the AgentZ repo:
+
+```bash
+# List all tasks, or filter by A0 SIP project
+python scripts/archon_api_tasks.py list
+python scripts/archon_api_tasks.py list --project-id 610ae854-2244-4cb8-a291-1e31561377ab
+
+# Update a task (status: todo | doing | review | done)
+python scripts/archon_api_tasks.py update TASK_UUID --status done
+python scripts/archon_api_tasks.py update TASK_UUID --status doing --description "Implementation notes..."
+```
+
+Set **`ARCHON_API_URL`** if Archon is not on `http://localhost:8181`. See **QUICK_REFERENCE.md** (Archon task sync).
+
+## Task Update Instructions (MCP)
 
 When Archon MCP is accessible, update tasks as follows:
 

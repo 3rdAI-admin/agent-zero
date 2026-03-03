@@ -1,4 +1,5 @@
 """Tests for Ollama preset kwargs (anti-repetition, context length, parameter mapping)."""
+
 from __future__ import annotations
 
 import sys
@@ -12,7 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.switch_model_preset import (
     PRESETS,
     _OLLAMA_CHAT_KWARGS,
-    _OLLAMA_BROWSER_KWARGS,
     _OLLAMA_UTIL_KWARGS,
 )
 

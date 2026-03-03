@@ -342,12 +342,28 @@ microphoneButton.addEventListener('click', async () => {
 
 // Some error handling for microphone input
 async function requestMicrophonePermission() {
+    const isSecure = () => {
+        if (typeof window === "undefined" || !window.location) return false;
+        const { protocol, hostname } = window.location;
+        if (protocol === "https:") return true;
+        if (protocol === "http:" && (hostname === "localhost" || hostname === "127.0.0.1")) return true;
+        return false;
+    };
+    const insecureMsg = "Microphone requires a secure connection. Use https:// for this server, or open the app at http://localhost:8888 (same machine).";
+    if (!isSecure()) {
+        if (window.toastFrontendError) window.toastFrontendError(insecureMsg, "Microphone unavailable");
+        return false;
+    }
     try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         return true;
     } catch (err) {
         console.error('Error accessing microphone:', err);
-        window.toastFrontendError('Microphone access denied. Please enable microphone access in your browser settings.', 'Microphone Error');
+        const name = err?.name || "";
+        const msg = name === "NotAllowedError"
+            ? "Microphone blocked. Allow microphone when the browser prompts, or click the lock/info icon in the address bar and set Microphone to Allow."
+            : "Microphone access denied. Check the site permissions (lock icon in the address bar) or try again and choose Allow when prompted.";
+        if (window.toastFrontendError) window.toastFrontendError(msg, "Microphone Error");
         return false;
     }
 }

@@ -65,7 +65,7 @@ class Projects(ApiHandler):
     def create_project(self, project: dict | None):
         if project is None:
             raise Exception("Project data is required")
-        data = projects.BasicProjectData(**project)
+        data = projects.BasicProjectData(**project)  # type: ignore[typeddict-item]
         name = projects.create_project(project["name"], data)
         return projects.load_edit_project_data(name)
 
@@ -88,7 +88,7 @@ class Projects(ApiHandler):
         )
 
         try:
-            data = projects.BasicProjectData(**project)
+            data = projects.BasicProjectData(**project)  # type: ignore[typeddict-item]
             name = projects.clone_git_project(project["name"], git_url, git_token, data)
 
             # Success notification
@@ -121,7 +121,7 @@ class Projects(ApiHandler):
     def update_project(self, project: dict | None):
         if project is None:
             raise Exception("Project data is required")
-        data = projects.EditProjectData(**project)
+        data = projects.EditProjectData(**project)  # type: ignore[typeddict-item]
         name = projects.update_project(project["name"], data)
         return projects.load_edit_project_data(name)
 

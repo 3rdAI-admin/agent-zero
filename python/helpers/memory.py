@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, List, Sequence
+from typing import Any, List, Sequence, Union
 from langchain.storage import InMemoryByteStore, LocalFileStore
 from langchain.embeddings import CacheBackedEmbeddings
 from python.helpers import guids
@@ -43,10 +43,10 @@ class MyFaiss(FAISS):
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         # return all self.docstore._dict[id] in ids
         return [
-            self.docstore._dict[id]
+            self.docstore._dict[id]  # type: ignore[attr-defined]
             for id in (ids if isinstance(ids, list) else [ids])
-            if id in self.docstore._dict
-        ]  # type: ignore
+            if id in self.docstore._dict  # type: ignore[attr-defined]
+        ]
 
     async def aget_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         return self.get_by_ids(ids)
@@ -148,7 +148,7 @@ class Memory:
         os.makedirs(db_dir, exist_ok=True)
 
         if in_memory:
-            store = InMemoryByteStore()
+            store: Union[InMemoryByteStore, LocalFileStore] = InMemoryByteStore()
         else:
             os.makedirs(em_dir, exist_ok=True)
             store = LocalFileStore(em_dir)

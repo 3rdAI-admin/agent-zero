@@ -10,7 +10,7 @@ class SetSettings(ApiHandler):
         self, input: dict[Any, Any], request: Request
     ) -> dict[Any, Any] | Response:
         frontend = input.get("settings", input)
-        backend = settings.convert_in(settings.Settings(**frontend))
+        backend = settings.convert_in(settings.Settings(**frontend))  # type: ignore[typeddict-item]
         backend = settings.set_settings(backend)
         out = settings.convert_out(backend)
         return dict(out)

@@ -37,7 +37,7 @@ RUN bash /ins/post_install.sh $BRANCH
 #  9000-9009 – ancillary services (tunnel, MCP, etc.)
 EXPOSE 22 80 5900 9000-9009
 
-RUN chmod +x /exe/initialize.sh /exe/run_A0.sh /exe/run_searxng.sh /exe/run_tunnel_api.sh /exe/setup_vnc_password.sh
+RUN chmod +x /exe/initialize.sh /exe/run_A0.sh /exe/run_searxng.sh /exe/run_tunnel_api.sh /exe/setup_vnc_password.sh /exe/start_xvfb.sh
 
 # initialize runtime and switch to supervisord
 CMD ["/exe/initialize.sh", "$BRANCH"]

@@ -55,12 +55,24 @@ def normalize_name(name: str) -> str:
 
 
 def _determine_server_type(config_dict: dict) -> str:
-    """Determine the server type based on configuration, with backward compatibility."""
+    """Determine the server type based on configuration, with backward compatibility.
+
+    Checks 'type' first, then 'transport' (Claude Desktop config format),
+    then falls back to URL-based detection.
+
+    Args:
+        config_dict (dict): The server configuration dictionary.
+
+    Returns:
+        str: Either "MCPServerRemote" or "MCPServerLocal".
+    """
     # First check if type is explicitly specified
-    if "type" in config_dict:
-        server_type = config_dict["type"].lower()
+    raw_type = config_dict.get("type") or config_dict.get("transport")
+    if raw_type:
+        server_type = raw_type.lower()
         if server_type in [
             "sse",
+            "http",
             "http-stream",
             "streaming-http",
             "streamable-http",
@@ -85,11 +97,34 @@ def _determine_server_type(config_dict: dict) -> str:
 def _is_streaming_http_type(server_type: str) -> bool:
     """Check if the server type is a streaming HTTP variant."""
     return server_type.lower() in [
+        "http",
         "http-stream",
         "streaming-http",
         "streamable-http",
         "http-streaming",
     ]
+
+
+def _normalize_transport_to_type(transport_value: str) -> str:
+    """Normalize MCP config 'transport' values to internal 'type' values.
+
+    Many MCP server configs (e.g. Claude Desktop format) use "transport"
+    with values like "http" or "stdio". This maps them to the internal
+    type names used by _is_streaming_http_type and _determine_server_type.
+
+    Args:
+        transport_value (str): The raw transport value from the config.
+
+    Returns:
+        str: The normalized type value.
+    """
+    mapping = {
+        "http": "streamable-http",
+        "streamable-http": "streamable-http",
+        "sse": "sse",
+        "stdio": "stdio",
+    }
+    return mapping.get(transport_value.lower(), transport_value.lower())
 
 
 def initialize_mcp(mcp_servers_config: str):
@@ -281,6 +316,7 @@ class MCPServerRemote(BaseModel):
                     "name",
                     "description",
                     "type",
+                    "transport",
                     "url",
                     "serverUrl",
                     "headers",
@@ -293,6 +329,12 @@ class MCPServerRemote(BaseModel):
                         value = normalize_name(value)
                     if key == "serverUrl":
                         key = "url"  # remap serverUrl to url
+                    # Reason: Many MCP configs use "transport" instead of "type".
+                    # Map "transport" to "type" and normalize common values so the
+                    # streamable-http client is selected for servers that need it.
+                    if key == "transport":
+                        key = "type"
+                        value = _normalize_transport_to_type(value)
 
                     setattr(self, key, value)
             return self
@@ -478,7 +520,7 @@ class MCPConfig(BaseModel):
             # For simplicity and to ensure __init__ logic runs if needed for setup:
 
             # Option 1: Re-initialize the existing instance (if __init__ is idempotent for other fields)
-            instance.__init__(servers_list=servers_data)
+            instance.__init__(servers_list=servers_data)  # type: ignore[misc]
 
             # Option 2: Or, if __init__ has side effects we don't want to repeat,
             # and 'servers' is the primary thing 'update' changes:
@@ -886,17 +928,18 @@ class MCPClientBase(ABC):
                         original_exception = e
                     # Create a dummy exception to break out of the async block
                     raise RuntimeError("Dummy exception to break out of async block")
-        except Exception:
+        except Exception as exc:
             # Check if this is our dummy exception
+            reraise: Exception = exc
             if original_exception is not None:
-                e = original_exception
+                reraise = original_exception
             # We have the original exception stored
             PrintStyle(
                 background_color="#AA4455", font_color="white", padding=False
             ).print(
-                f"MCPClientBase ({self.server.name} - {operation_name}): Error during operation: {type(e).__name__}: {e}"
+                f"MCPClientBase ({self.server.name} - {operation_name}): Error during operation: {type(reraise).__name__}: {reraise}"
             )
-            raise e  # Re-raise the original exception
+            raise reraise  # Re-raise the original exception
         # finally:
         #     PrintStyle(font_color="cyan").print(
         #         f"MCPClientBase ({self.server.name} - {operation_name}): Session and transport will be closed by AsyncExitStack."

@@ -1,3 +1,4 @@
+from typing import Literal, cast
 from python.helpers.api import ApiHandler, Request, Response
 
 from python.helpers import file_tree, files
@@ -18,7 +19,9 @@ class SettingsWorkdirFileStructure(ApiHandler):
                 max_folders=int(input.get("workdir_max_folders", 0) or 0),
                 max_lines=int(input.get("workdir_max_lines", 0) or 0),
                 ignore=input.get("workdir_gitignore", "") or "",
-                output_mode=file_tree.OUTPUT_MODE_STRING,
+                output_mode=cast(
+                    Literal["string", "flat", "nested"], file_tree.OUTPUT_MODE_STRING
+                ),
             )
         )
 

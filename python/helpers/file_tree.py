@@ -10,16 +10,16 @@ from pathspec import PathSpec
 
 from python.helpers import files as files_helper
 
-SORT_BY_NAME = "name"
-SORT_BY_CREATED = "created"
-SORT_BY_MODIFIED = "modified"
+SORT_BY_NAME: Literal["name"] = "name"
+SORT_BY_CREATED: Literal["created"] = "created"
+SORT_BY_MODIFIED: Literal["modified"] = "modified"
 
-SORT_ASC = "asc"
-SORT_DESC = "desc"
+SORT_ASC: Literal["asc"] = "asc"
+SORT_DESC: Literal["desc"] = "desc"
 
-OUTPUT_MODE_STRING = "string"
-OUTPUT_MODE_FLAT = "flat"
-OUTPUT_MODE_NESTED = "nested"
+OUTPUT_MODE_STRING: Literal["string"] = "string"
+OUTPUT_MODE_FLAT: Literal["flat"] = "flat"
+OUTPUT_MODE_NESTED: Literal["nested"] = "nested"
 
 
 def file_tree(
@@ -226,7 +226,7 @@ def file_tree(
 
     if limit_reached and remaining_queue:
         for folder_node, folder_path, _ in remaining_queue:
-            summary = _create_folder_unprocessed_comment(
+            summary = _create_folder_unprocessed_comment(  # type: ignore[no-redef, assignment]
                 folder_node,
                 folder_path,
                 abs_root,
@@ -526,7 +526,7 @@ def _resolve_ignore_patterns(
     if not lines:
         return None
 
-    return PathSpec.from_lines("gitwildmatch", lines)
+    return PathSpec.from_lines("gitignore", lines)
 
 
 def _list_directory_children(

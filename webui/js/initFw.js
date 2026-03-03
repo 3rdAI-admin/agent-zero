@@ -6,14 +6,15 @@ import { registerAlpineMagic } from "./confirmClick.js";
 // initialize required elements
 await initializer.initialize();
 
-// import alpine library
-await import("../vendor/alpine/alpine.min.js");
-
-// register $confirmClick magic helper for inline button confirmations
+// Register all Alpine extensions (magics + directives) via alpine:init.
+// This event fires during Alpine.start() but BEFORE any component is
+// initialized, avoiding the race where queueMicrotask(start) fires
+// before we can call Alpine.magic() / Alpine.directive().
 registerAlpineMagic();
 
-// add x-destroy directive to alpine
-Alpine.directive(
+document.addEventListener("alpine:init", () => {
+  // add x-destroy directive to alpine
+  Alpine.directive(
     "destroy",
     (_el, { expression }, { evaluateLater, cleanup }) => {
       const onDestroy = evaluateLater(expression);
@@ -59,3 +60,7 @@ Alpine.directive(
       cleanup(() => clearInterval(intervalId));
     }
   );
+});
+
+// import alpine library (auto-starts via queueMicrotask)
+await import("../vendor/alpine/alpine.min.js");

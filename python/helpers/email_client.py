@@ -121,7 +121,7 @@ class EmailClient:
                     access_type=DELEGATE,
                 )
 
-            self.exchange_account = await loop.run_in_executor(None, _sync_connect)
+            self.exchange_account = await loop.run_in_executor(None, _sync_connect)  # type: ignore[func-returns-value]
             PrintStyle.standard(f"Connected to Exchange server: {self.server}")
         except ImportError as e:
             raise RepairableException(
@@ -417,7 +417,7 @@ class EmailClient:
                     if filename:
                         filename = self._decode_header(filename)
                         content = part.get_payload(decode=True)
-                        if content:
+                        if isinstance(content, bytes) and content:
                             path = await self._save_attachment_bytes(
                                 filename, content, download_folder
                             )
@@ -438,18 +438,18 @@ class EmailClient:
                 elif content_type == "text/plain":
                     if not body:  # Use first text/plain as primary body
                         charset = part.get_content_charset() or "utf-8"
-                        body = part.get_payload(decode=True).decode(
-                            charset, errors="ignore"
-                        )
+                        payload = part.get_payload(decode=True)
+                        if isinstance(payload, bytes):
+                            body = payload.decode(charset, errors="ignore")
                         body_parts.append(body)
 
                 elif content_type == "text/html":
                     if not body:  # Use first text/html as primary body if no text/plain
                         charset = part.get_content_charset() or "utf-8"
-                        html_content = part.get_payload(decode=True).decode(
-                            charset, errors="ignore"
-                        )
-                        body = self._html_to_text(html_content, cid_map)
+                        html_payload = part.get_payload(decode=True)
+                        if isinstance(html_payload, bytes):
+                            html_content = html_payload.decode(charset, errors="ignore")
+                            body = self._html_to_text(html_content, cid_map)
                         body_parts.append(body)
 
             # Combine body parts if we built them up
@@ -460,7 +460,7 @@ class EmailClient:
             content_type = email_msg.get_content_type()
             charset = email_msg.get_content_charset() or "utf-8"
             content = email_msg.get_payload(decode=True)
-            if content:
+            if isinstance(content, bytes) and content:
                 if content_type == "text/html":
                     body = self._html_to_text(
                         content.decode(charset, errors="ignore"), cid_map
@@ -488,6 +488,8 @@ class EmailClient:
             soup = BeautifulSoup(html_content, "html.parser")
             for img in soup.find_all("img"):
                 src = img.get("src", "")
+                if not isinstance(src, str):
+                    continue
                 if src.startswith("cid:"):
                     cid = src[4:]  # Remove "cid:" prefix
                     if cid in cid_map:

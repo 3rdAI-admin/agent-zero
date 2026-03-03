@@ -10,7 +10,9 @@ class RateLimiter:
             key: value if isinstance(value, (int, float)) else 0
             for key, value in (limits or {}).items()
         }
-        self.values = {key: [] for key in self.limits.keys()}
+        self.values: dict[str, list[tuple[float, int]]] = {
+            key: [] for key in self.limits.keys()
+        }
         self._lock = asyncio.Lock()
 
     def add(self, **kwargs: int):

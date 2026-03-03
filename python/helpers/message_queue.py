@@ -183,8 +183,8 @@ def send_all_aggregated(context: "AgentContext") -> int:
         items.append(pop_first(context))
 
     # Combine texts with separator
-    text = "\n\n---\n\n".join(i["text"] for i in items if i["text"])
-    attachments = [a for i in items for a in i.get("attachments", [])]
+    text = "\n\n---\n\n".join(i["text"] for i in items if i and i["text"])  # type: ignore[index]
+    attachments = [a for i in items if i for a in i.get("attachments", [])]  # type: ignore[union-attr]
 
     log_user_message(context, text, attachments, source=" (queued batch)")
     context.communicate(UserMessage(text, attachments))

@@ -361,7 +361,7 @@ class LiteLLMChatWrapper(SimpleChatModel):
                             },
                         }
                     )
-                message_dict["tool_calls"] = new_tool_calls
+                message_dict["tool_calls"] = new_tool_calls  # type: ignore[assignment]
 
             # Handle tool call ID for ToolMessage
             tool_call_id = getattr(m, "tool_call_id", None)
@@ -372,10 +372,10 @@ class LiteLLMChatWrapper(SimpleChatModel):
 
         if explicit_caching and result:
             if result[0]["role"] == "system":
-                result[0]["cache_control"] = {"type": "ephemeral"}
+                result[0]["cache_control"] = {"type": "ephemeral"}  # type: ignore[assignment]
             for i in range(len(result) - 1, -1, -1):
                 if result[i]["role"] == "assistant":
-                    result[i]["cache_control"] = {"type": "ephemeral"}
+                    result[i]["cache_control"] = {"type": "ephemeral"}  # type: ignore[assignment]
                     break
 
         return result

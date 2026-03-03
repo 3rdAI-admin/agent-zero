@@ -144,7 +144,18 @@ If you run Agent Zero with `docker compose up`, you can run the Workspace MCP as
    }
    ```
 
-See [docker/workspace-mcp/README.md](../../docker/workspace-mcp/README.md) for details.
+   **Multiple accounts (OAuth 2.1):** The container runs with `MCP_ENABLE_OAUTH21=true`. To use a specific user's Google account, pass a bearer token in `headers`:
+   ```json
+   "google_workspace": {
+     "description": "Gmail, Drive, etc. (multi-user)",
+     "url": "http://workspace_mcp:8889/mcp",
+     "type": "streamable-http",
+     "headers": { "Authorization": "Bearer YOUR_USER_TOKEN" }
+   }
+   ```
+   See [workspacemcp.com/docs](https://workspacemcp.com/docs) for OAuth 2.1 token issuance.
+
+For **remote hosts** and **single vs multi-credential** client examples, see [Quick setup (QUICKSETUP.md)](../setup/QUICKSETUP.md). See also [docker/workspace-mcp/README.md](../../docker/workspace-mcp/README.md).
 
 ### Option 2b: Remote HTTP (server on host)
 

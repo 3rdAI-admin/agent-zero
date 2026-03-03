@@ -63,8 +63,8 @@ class Message(ApiHandler):
         await extension.call_extensions(
             "user_message_ui", agent=context.get_agent(), data=data
         )
-        message = data.get("message", "")
-        attachment_paths = data.get("attachment_paths", [])
+        message = str(data.get("message", ""))
+        attachment_paths = list(data.get("attachment_paths", []))
 
         # Store attachments in agent data
         # context.agent0.set_data("attachments", attachment_paths)

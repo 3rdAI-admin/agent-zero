@@ -36,9 +36,11 @@ class AttachmentManager:
     def get_file_extension(filename: str) -> str:
         return filename.rsplit(".", 1)[1].lower() if "." in filename else ""
 
-    def validate_mime_type(self, file) -> bool:
+    def validate_mime_type(self, file: FileStorage) -> bool:
         try:
             mime_type = file.content_type
+            if mime_type is None:
+                return False
             return mime_type.split("/")[0] in ["image", "text", "application"]
         except AttributeError:
             return False
@@ -80,7 +82,7 @@ class AttachmentManager:
             with Image.open(image_path) as img:
                 # Convert image if needed
                 if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGB")
+                    img = img.convert("RGB")  # type: ignore[assignment]
 
                 # Resize for preview
                 img.thumbnail((max_size, max_size))

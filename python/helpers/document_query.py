@@ -439,6 +439,11 @@ class DocumentQueryHelper:
 
         return True, str(ai_response)
 
+    # Basenames that must never be returned by document_get_content (credential leak prevention).
+    _CREDENTIAL_BASENAMES = frozenset(
+        {"token.json", "credentials.json", "secrets.env", ".env", ".env.local"}
+    )
+
     async def document_get_content(
         self, document_uri: str, add_to_db: bool = False
     ) -> str:
@@ -493,6 +498,12 @@ class DocumentQueryHelper:
                 document_uri = files.fix_dev_path(url.path)
             except Exception as e:
                 raise ValueError(f"Invalid document path '{url.path}'") from e
+            # Reason: Prevent credential leak — never return token/secret file contents to the agent or logs.
+            if os.path.basename(document_uri) in self._CREDENTIAL_BASENAMES:
+                raise ValueError(
+                    "Access denied: credential files (e.g. token.json, credentials.json, secrets.env, .env) "
+                    "cannot be read by document_query for security. Use Settings → Secrets or project .a0proj for credentials."
+                )
 
         if encoding:
             raise ValueError(
@@ -539,6 +550,13 @@ class DocumentQueryHelper:
                 self.progress_callback(f"Indexed {len(ids)} chunks")
         else:
             await self.agent.handle_intervention()
+            if (
+                os.path.basename(document_uri_norm.rstrip("/"))
+                in self._CREDENTIAL_BASENAMES
+            ):
+                raise ValueError(
+                    "Access denied: credential files cannot be read by document_query for security."
+                )
             doc = await self.store.get_document(document_uri_norm)
             if doc:
                 document_content = doc.page_content
@@ -601,7 +619,7 @@ class DocumentQueryHelper:
                 temp_file_path = temp_file.name
         elif scheme in ["http", "https"]:
             # download the file from the web url to a temporary file using python libraries for downloading
-            import requests
+            import requests  # type: ignore[import-untyped]
             import tempfile
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Annotated, Literal, Union
 from urllib.parse import urlparse
@@ -365,7 +366,7 @@ class DynamicMcpProxy:
         from mcp.server.auth.middleware.bearer_auth import RequireAuthMiddleware  # type: ignore
         import anyio
 
-        server_routes = []
+        server_routes: list[Mount] = []
         server_middleware = []
 
         self.http_session_task_group = None
@@ -390,7 +391,7 @@ class DynamicMcpProxy:
 
         if auth_provider:
             server_routes.extend(
-                auth_provider.get_routes(mcp_path=streamable_http_path)
+                auth_provider.get_routes(mcp_path=streamable_http_path)  # type: ignore[arg-type]
             )
             server_middleware.extend(auth_provider.get_middleware())
 
@@ -419,12 +420,12 @@ class DynamicMcpProxy:
 
         additional_routes = mcp_server._get_additional_http_routes()
         if additional_routes:
-            server_routes.extend(additional_routes)
+            server_routes.extend(additional_routes)  # type: ignore[arg-type]
 
         server_middleware.extend(middleware)
 
         return create_base_app(
-            routes=server_routes,
+            routes=server_routes,  # type: ignore[arg-type]
             middleware=server_middleware,
             debug=fastmcp.settings.debug,
         )
@@ -477,8 +478,17 @@ class DynamicMcpProxy:
         modified_scope["path"] = cleaned_path
 
         if has_token and ("/sse" in path or "/messages" in path):
-            # Route to SSE app with cleaned path
-            await sse_app(modified_scope, receive, send)
+            # Route to SSE app with cleaned path. During shutdown or client disconnect,
+            # Starlette can raise AssertionError (e.g. http.response.start when expecting
+            # http.response.body). Catch and log so ASGI doesn't surface a stack trace.
+            try:
+                await sse_app(modified_scope, receive, send)
+            except AssertionError as e:
+                _PRINTER.print(
+                    f"[MCP] SSE response lifecycle closed (shutdown/disconnect): {e}"
+                )
+            except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError) as e:
+                _PRINTER.print(f"[MCP] SSE connection closed: {e!r}")
         elif has_token and "/http" in path:
             # Route to HTTP app with cleaned path
             await http_app(modified_scope, receive, send)

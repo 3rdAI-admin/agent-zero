@@ -10,7 +10,7 @@ import os
 import uuid
 import fcntl
 from datetime import datetime
-from typing import Literal, TypedDict, Optional, List
+from typing import Any, Literal, TypedDict, Optional, List, cast
 from contextlib import contextmanager
 
 from python.helpers import files
@@ -129,7 +129,7 @@ class AssessmentState:
             with open(filepath, "w") as f:
                 json.dump(self._get_default_state(), f, indent=2)
 
-        f = open(filepath, mode)
+        f = open(filepath, mode)  # type: ignore[assignment]
         try:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             yield f
@@ -183,7 +183,7 @@ class AssessmentState:
 
         try:
             with self._file_lock(state_file, "r") as f:
-                data = json.load(f)
+                data: AssessmentStateData = json.load(f)
                 self._printer.print(
                     f"[Assessment] Loaded state: {len(data.get('findings', []))} findings"
                 )
@@ -340,7 +340,7 @@ class AssessmentState:
             self._printer.print(f"[Assessment] Finding not found: {finding_id}")
             return False
 
-        finding.update(updates)
+        finding.update(updates)  # type: ignore[typeddict-item]
         self.save(state)
 
         self._printer.print(f"[Assessment] Updated finding: {finding_id}")
@@ -460,8 +460,9 @@ class AssessmentState:
             True if in scope, False otherwise
         """
         state = self.load()
-        scope = state.get("meta", {}).get("scope", [])
-        out_of_scope = state.get("meta", {}).get("out_of_scope", [])
+        meta = cast(dict[str, Any], state.get("meta", {}))
+        scope: list[str] = meta.get("scope", [])
+        out_of_scope: list[str] = meta.get("out_of_scope", [])
 
         # Check explicit out of scope first
         for excluded in out_of_scope:
@@ -521,19 +522,21 @@ class AssessmentState:
         state = self.load()
 
         findings = state.get("findings", [])
-        findings_by_severity = {}
+        findings_by_severity: dict[str, int] = {}
         for finding in findings:
             severity = finding.get("severity", "info")
             findings_by_severity[severity] = findings_by_severity.get(severity, 0) + 1
 
+        meta = cast(dict[str, Any], state.get("meta", {}))
+        progress = cast(dict[str, Any], state.get("progress", {}))
         return {
-            "name": state.get("meta", {}).get("name", "Unknown"),
-            "status": state.get("meta", {}).get("status", "unknown"),
-            "phase": state.get("progress", {}).get("phase", "unknown"),
+            "name": meta.get("name", "Unknown"),
+            "status": meta.get("status", "unknown"),
+            "phase": progress.get("phase", "unknown"),
             "targets_count": len(state.get("targets", [])),
             "findings_count": len(findings),
             "findings_by_severity": findings_by_severity,
-            "scope": state.get("meta", {}).get("scope", []),
+            "scope": meta.get("scope", []),
         }
 
 

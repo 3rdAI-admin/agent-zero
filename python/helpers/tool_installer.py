@@ -22,7 +22,7 @@ class ToolConfig:
     install_cmd: str  # Command to install the tool
     install_type: str  # apt, pip, go, npm, script
     description: str
-    required_deps: list  # Other tools that must be installed first
+    required_deps: list[str]  # Other tools that must be installed first
 
 
 class ToolInstaller:
@@ -327,10 +327,10 @@ class ToolInstaller:
 
         try:
             # Run check command
-            result = subprocess.run(
+            proc = subprocess.run(
                 tool.check_cmd, shell=True, capture_output=True, timeout=10
             )
-            installed = result.returncode == 0
+            installed = proc.returncode == 0
             cls._installed_cache[tool_name] = installed
             return installed
         except (subprocess.TimeoutExpired, Exception):
@@ -441,7 +441,7 @@ class ToolInstaller:
         return cls.install(tool_name)
 
     @classmethod
-    def ensure_multiple(cls, tool_names: list) -> Dict[str, Tuple[bool, str]]:
+    def ensure_multiple(cls, tool_names: list[str]) -> Dict[str, Tuple[bool, str]]:
         """
         Ensure multiple tools are installed.
 

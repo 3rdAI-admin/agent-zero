@@ -41,8 +41,8 @@ class UploadWorkDirFiles(ApiHandler):
 
 async def upload_files(uploaded_files: list[FileStorage], current_path: str):
     if runtime.is_development():
-        successful = []
-        failed = []
+        successful: list[str | None] = []
+        failed: list[str | None] = []
         for file in uploaded_files:
             file_content = file.stream.read()
             base64_content = base64.b64encode(file_content).decode("utf-8")
@@ -54,7 +54,7 @@ async def upload_files(uploaded_files: list[FileStorage], current_path: str):
                 failed.append(file.filename)
     else:
         browser = FileBrowser()
-        successful, failed = browser.save_files(uploaded_files, current_path)
+        successful, failed = browser.save_files(uploaded_files, current_path)  # type: ignore[arg-type, assignment]
 
     return successful, failed
 

@@ -750,6 +750,8 @@ The TTS uses a standard voice interface provided by modern browsers, which may s
 ### Speech-to-Text
 Send voice messages to agents using OpenAI's Whisper model (does not require OpenAI API key!):
 
+> **Microphone access:** Browsers allow the microphone only in **secure contexts** — either **HTTPS** or **http://localhost**. If you open the Web UI at `http://<LAN-IP>:8888`, the microphone will be blocked. Use **http://localhost:8888** when on the same machine, or enable HTTPS (see [Complete Setup Guide](../COMPLETE_SETUP_GUIDE.md) — HTTP vs HTTPS) and open the app at `https://<host>:8888`.
+
 1. Click the microphone button in the input area to start recording
 2. The button color indicates the current status:
    - Grey: Inactive

@@ -2,7 +2,7 @@ import argparse
 import inspect
 import secrets
 from pathlib import Path
-from typing import TypeVar, Callable, Awaitable, Union, overload, cast
+from typing import Any, TypeVar, Callable, Awaitable, Union, overload, cast
 from python.helpers import dotenv, rfc, settings, files
 import asyncio
 import threading
@@ -13,9 +13,9 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 parser = argparse.ArgumentParser()
-args = {}
-dockerman = None
-runtime_id = None
+args: dict[str, Any] = {}
+dockerman: Any = None
+runtime_id: str | None = None
 
 
 def initialize():
@@ -146,7 +146,7 @@ def call_development_function_sync(
     func: Union[Callable[..., T], Callable[..., Awaitable[T]]], *args, **kwargs
 ) -> T:
     # run async function in sync manner
-    result_queue = queue.Queue()
+    result_queue: queue.Queue[T] = queue.Queue()
 
     def run_in_thread():
         result = asyncio.run(call_development_function(func, *args, **kwargs))

@@ -238,3 +238,53 @@ switch_model_preset.py PRESETS dict
 - **Ollama server:** 192.168.50.7:11434
 - **Models loaded:** GLM-4.7-Flash (40.4GB VRAM, ctx=202752), bazobehram (15.9GB VRAM, ctx=40960)
 - **Total VRAM:** 56.3GB
+
+---
+---
+
+# Infrastructure Fixes (from IMPROVE.md monitoring)
+
+> **Status:** See **IMPROVE.md** → "Task ownership & status" for current owner and status of each item.
+> **Date:** 2026-03-03
+> **Reference:** See `IMPROVE.md` for full issue descriptions and priority order.
+
+---
+
+## Done (Claude Code)
+
+| Item | Status | Details |
+|------|--------|---------|
+| ipython (#0) | Done | Installed in container + added to Dockerfile — `code_execution_tool` python runtime works |
+| Playwright browser persistence | Done | Volume mount + Dockerfile step — browsers survive container recreates |
+| Google API knowledge file | Done | `knowledge/main/google_apis.md` — agent no longer needs to re-discover/recreate Google scripts |
+
+---
+
+## Done (Background agents)
+
+| Item | Status | Details |
+|------|--------|---------|
+| xvfb crash loop (#10) | Done | `start_xvfb.sh` wrapper removes stale locks; supervisor configs: `startsecs`, `startretries`, removed `-fork`; event listener: non-essential FATAL only warns, doesn't kill container |
+| Archon MCP timeout (#1) | Done | 3 root causes: protocol mismatch (SSE→StreamableHTTP), Docker network isolation, dead `archon-local`. Fixed `.mcp.json` (Docker DNS, correct type, timeouts), `docker-compose.yml` (archon network), `mcp_handler.py` (transport field support), `settings.py` (init_timeout 10→30s) |
+
+---
+
+## Cursor Tasks (assigned in RESPONSES.md) — completed
+
+### Task 1: Starlette AssertionError in MCP SSE endpoint — Done
+
+On server shutdown, Starlette raises `AssertionError` in the MCP SSE route. **Implemented:** `python/helpers/mcp_server.py` — wrapped `await sse_app(...)` in try/except for `AssertionError`, `ConnectionResetError`, `BrokenPipeError`, and `asyncio.CancelledError`; log and continue so ASGI shutdown is clean.
+
+### Task 2: Health check log noise — Done
+
+Every 30s, Docker's healthcheck generates `GET /health` 200 in the Uvicorn access log. **Implemented:** `run_ui.py` — added `_HealthCheckAccessLogFilter` that suppresses log records for ` /health ` + ` 200 `; filter attached to `uvicorn.access` when access logs are enabled.
+
+### Task 3: Duplicate POST /projects on page load — Done
+
+Two identical `POST /projects` fired on login. **Implemented:** `webui/components/projects/projects-store.js` — `loadProjectsList()` now reuses an in-flight promise (`_loadProjectsListPromise`); concurrent callers get the same request, so only one POST per load.
+
+---
+
+## Blocked / needs input
+
+*(None at this time.)*

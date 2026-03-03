@@ -146,7 +146,7 @@ def _patched_fix_gemini_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
             # If this is an object type with empty properties, add a placeholder
             if (
                 isinstance(cleaned.get("type", ""), str)
-                and cleaned.get("type", "").upper() == "OBJECT"
+                and cleaned.get("type", "").upper() == "OBJECT"  # type: ignore[union-attr]
                 and "properties" in cleaned
                 and isinstance(cleaned["properties"], dict)
                 and len(cleaned["properties"]) == 0
@@ -155,7 +155,7 @@ def _patched_fix_gemini_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
 
             # PATCH: Also remove 'title' from the required list if it exists
             if "required" in cleaned and isinstance(cleaned.get("required"), list):
-                cleaned["required"] = [p for p in cleaned["required"] if p != "title"]
+                cleaned["required"] = [p for p in cleaned["required"] if p != "title"]  # type: ignore[union-attr, assignment]
 
             return cleaned
         elif isinstance(obj, list):
@@ -167,4 +167,4 @@ def _patched_fix_gemini_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
 
 def apply():
     """Applies the monkey-patch to ChatGoogle."""
-    ChatGoogle._fix_gemini_schema = _patched_fix_gemini_schema
+    ChatGoogle._fix_gemini_schema = _patched_fix_gemini_schema  # type: ignore[assignment]

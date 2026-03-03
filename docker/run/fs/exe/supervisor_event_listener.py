@@ -7,6 +7,20 @@ import time
 
 from supervisor.childutils import listener # type: ignore
 
+# Reason: These processes are non-essential (VNC/X11 desktop stack).
+# If they enter FATAL state, we log a warning but do NOT kill supervisord,
+# because the main Web UI and agent services work perfectly without them.
+NON_ESSENTIAL_PROCESSES = frozenset({
+    "xvfb",
+    "fluxbox",
+    "x11vnc",
+    "autocutsel",
+    "wallpaper",
+    "setup_vnc_password",
+    "setup_clipboard_shortcuts",
+    "install_security_tools",
+})
+
 
 def main(args):
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(asctime)s %(levelname)s %(filename)s: %(message)s')
@@ -23,12 +37,25 @@ def main(args):
         logger.debug("Args: %r", repr(args))
 
         if debug_mode:
+            listener.ok(sys.stdout)
             continue
 
         try:
             if headers["eventname"] == "PROCESS_STATE_FATAL":
-                logger.info("Process entered FATAL state...")
-                if not args or body["processname"] in args:
+                process_name = body.get("processname", "unknown")
+                logger.info("Process '%s' entered FATAL state.", process_name)
+
+                # Skip non-essential processes — do not kill the container
+                if process_name in NON_ESSENTIAL_PROCESSES:
+                    logger.warning(
+                        "Ignoring FATAL for non-essential process '%s'. "
+                        "The Web UI and agent services are unaffected.",
+                        process_name,
+                    )
+                    listener.ok(sys.stdout)
+                    continue
+
+                if not args or process_name in args:
                     logger.error("Killing off supervisord instance ...")
                     _ = subprocess.call(["/bin/kill", "-15", "1"], stdout=sys.stderr)
                     logger.info("Sent TERM signal to init process")
