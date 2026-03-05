@@ -35,7 +35,17 @@ from python.helpers.websocket_namespace_discovery import discover_websocket_name
 
 # disable logging
 import logging
+import warnings
 logging.getLogger().setLevel(logging.WARNING)
+
+# Suppress upstream deprecation warnings that we cannot fix:
+# - litellm uses Pydantic .dict() (deprecated in V2, removed in V3)
+# - faiss imports numpy.core._multiarray_umath (renamed to numpy._core)
+# - SWIG modules lack __module__ attribute (faiss compiled extension)
+warnings.filterwarnings("ignore", message=r".*The `dict` method is deprecated.*", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=r".*numpy\.core\._multiarray_umath.*", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=r".*builtin type Swig.*", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=r".*builtin type swigvarlink.*", category=DeprecationWarning)
 
 
 class _HealthCheckAccessLogFilter(logging.Filter):
