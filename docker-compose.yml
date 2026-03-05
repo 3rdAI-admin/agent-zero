@@ -95,8 +95,22 @@ services:
       retries: 5
       start_period: 30s    # App often ready in 20–30s; /health makes healthy sooner
 
+  # Ollama (local LLM), CPU-only by default. Agent Zero can use http://ollama:11434 when on same network.
+  # For GPU: use docker-compose.gpu.yml override — docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - default
+    restart: unless-stopped
+
   # Google Workspace MCP (Gmail, Drive, Docs, Sheets, Calendar, etc.). Agent Zero connects at http://workspace_mcp:8889/mcp.
-  # OAuth 2.1 multi-user: set MCP_ENABLE_OAUTH21=true; clients pass Authorization: Bearer <token> in headers.
+  # MCP_ENABLE_OAUTH21=false: single-account mode — server uses credentials in workspace-mcp-credentials (no bearer token needed).
+  # Set MCP_ENABLE_OAUTH21=true for multi-user; then add "headers": {"Authorization": "Bearer <token>"} to google_workspace in Settings → MCP.
   # First-time OAuth: run ./scripts/setup/run_workspace_mcp.sh on the host once, then copy ~/.google_workspace_mcp to ./workspace-mcp-credentials.
   workspace_mcp:
     build:
@@ -108,7 +122,7 @@ services:
       - .env
     environment:
       - WORKSPACE_MCP_PORT=8889
-      - MCP_ENABLE_OAUTH21=true
+      - MCP_ENABLE_OAUTH21=false
     volumes:
       - ./workspace-mcp-credentials:/home/mcp/.google_workspace_mcp
     expose:
@@ -124,3 +138,6 @@ services:
 networks:
   archon_app-network:
     external: true
+
+volumes:
+  ollama_data: {}

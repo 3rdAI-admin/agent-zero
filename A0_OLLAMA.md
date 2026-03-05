@@ -133,6 +133,75 @@ After changing the API base, save settings and restart the app/container.
 
 ---
 
+## Ollama container with GPU access
+
+Yes. To give an Ollama container access to the GPU you need the **NVIDIA Container Toolkit** and to reserve the GPU in the service.
+
+**Prerequisites (on the GPU host — the Linux machine where Docker runs with the NVIDIA GPU):**
+
+1. NVIDIA drivers installed (`nvidia-smi` works).
+2. **NVIDIA Container Toolkit** installed and Docker configured. Use the project script (run on the GPU host):
+   ```bash
+   # On the GPU host (e.g. 192.168.50.7), from the repo root:
+   sudo bash scripts/setup/install-nvidia-container-toolkit.sh
+   ```
+   Or from your Mac/laptop (sudo on the remote may prompt for password):
+   ```bash
+   ssh 192.168.50.7 'sudo bash -s' < scripts/setup/install-nvidia-container-toolkit.sh
+   ```
+   The script installs the toolkit, runs `nvidia-ctk runtime configure --runtime=docker`, and restarts Docker. Manual install: [NVIDIA Container Toolkit install guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+3. Confirm GPU in a container: `docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi`
+
+**Compose example (Ollama with GPU):**
+
+```yaml
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  ollama_data: {}
+```
+
+- Use **`count: all`** to expose all GPUs, or **`device_ids: ['0']`** to pick a specific GPU.
+- If your Ollama stack is in a different compose file, add the same `deploy.resources.reservations.devices` block under that service and restart the container.
+
+After the container has GPU access, use **`http://ollama:11434`** (same network) or **`http://localhost:11434`** (if port is published) as the API base in Agent Zero.
+
+### Compose: GPU vs non-GPU
+
+| File | Use case |
+|------|----------|
+| **`docker-compose.yml`** | Default: Ollama runs **CPU-only**. Works on any host (Mac, Linux without GPU). |
+| **`docker-compose.gpu.yml`** | Override: Ollama gets **NVIDIA GPU**. Use with the base file on a host with the NVIDIA Container Toolkit. |
+
+**Non-GPU (default):**
+```bash
+docker compose up -d
+```
+
+**GPU (NVIDIA host):**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+Or set once: `export COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml` then `docker compose up -d`.
+
+---
+
 ## Config files reference
 
 | File | Purpose |
