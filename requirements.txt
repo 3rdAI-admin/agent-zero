@@ -1,6 +1,6 @@
 a2wsgi==1.10.8
 ansio==0.0.1
-browser-use==0.5.11
+browser-use>=0.11.13,<0.12.0
 docker==7.1.0
 duckduckgo-search==6.1.12
 faiss-cpu==1.11.0
@@ -16,7 +16,7 @@ kokoro>=0.9.2
 simpleeval==1.0.3
 langchain-core==0.3.81
 langchain-community==0.3.27
-litellm>=1.63.2,<1.82.0
+litellm>=1.82.0
 langchain-unstructured[all-docs]==0.1.6
 openai-whisper==20250625
 lxml_html_clean>=0.4.0
@@ -26,7 +26,7 @@ newspaper3k==0.2.8
 paramiko==3.5.0
 playwright==1.52.0
 pypdf>=6.7.4
-python-dotenv==1.1.0
+python-dotenv>=1.2.1
 pytz==2024.2
 sentence-transformers==3.0.1
 tiktoken==0.8.0
@@ -35,7 +35,7 @@ unstructured-client==0.31.0
 webcolors==24.6.0
 nest-asyncio==1.6.0
 crontab==1.0.1
-markdownify==1.1.0
+markdownify>=1.2.0
 pydantic==2.11.7
 pymupdf==1.25.3
 pytesseract==0.3.13
@@ -53,6 +53,9 @@ pywinpty==3.0.2; sys_platform == "win32"
 python-socketio>=5.14.2
 uvicorn>=0.38.0
 wsproto>=1.2.0
+# Google API client for main venv (IMPROVE.md Task 6: FR-4.1)
+google-auth>=2.35.0
+google-api-python-client>=2.150.0
 
 # Security: pin transitive deps with known CVEs (Dependabot)
 urllib3>=2.6.3

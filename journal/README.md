@@ -1,6 +1,9 @@
 # Validation journal index
 
 - 2025-02-18: 1 run, last Pass (E:0 W:8+)
+- 2026-03-03 | validate (template) | Pass (E:0 W:0; all structure/commands/PRPs present)
+- 2026-03-03 | validate-project --thorough | Pass (153/153; E2E 9/9)
+- 2026-03-03 | validate-project | Pass (153/153; 0 errors; 0 warnings; E2E 9/9)
 - 2026-03-03 | validate (template) | Pass (resolved: INITIAL_EXAMPLE, setup scripts, use-cases)
 - 2026-03-03 | validate (template) --build | Fail (E:12 W:8; template structure; build OK)
 - 2026-03-03 | validate-project | Pass (153/153 tests; 0 mypy errors; E2E 9/9; fixed files.py type: ignore placement)
@@ -8,3 +11,5 @@
 - 2026-02-26 | validate-project | Fail (P5 container not running; P1–P4 pass)
 - 2026-02-20 | validate-project | Pass (all phases; fixed api.py send_file re-export)
 - 2026-02-18 | validate-project | Fail → Pass (P1–P4) → Pass (post-docs-update, all phases)
+- 2026-03-04 | validate-project --thorough | Pass (153/153 tests; E:0 W:0; E2E 9/9; batch improvements)
+- 2026-03-04 | validate-project --thorough | Pass (153/153 tests; E:0 W:1; E2E 9/9; post-upgrade: browser-use 0.11.13, litellm 1.79.3)

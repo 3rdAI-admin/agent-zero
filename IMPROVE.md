@@ -2,7 +2,7 @@
 
 Findings from monitoring the app and logs. Update this file when testing or after reviewing `docker logs agent-zero`.
 
-**Last monitored:** 2026-03-03 22:58 (health filter bypass + log interleaving JSON corruption)
+**Last monitored:** 2026-03-04 (batch improvements implemented: WebSocket auth, code validation, MCP context manager, autocutsel timing, documentation)
 
 ---
 
@@ -127,6 +127,10 @@ Findings from monitoring the app and logs. Update this file when testing or afte
 | Starlette assertion (#9) | Done (Cursor) | MCP SSE: try/except AssertionError + connection errors; log and continue (mcp_server.py) |
 | Health check log noise | Done (Cursor) | _HealthCheckAccessLogFilter on uvicorn.access for GET /health 200 (run_ui.py) |
 | Duplicate POST /projects | Done (Cursor) | loadProjectsList in-flight promise deduplication (projects-store.js) |
+| Health filter bypass (#20) | Done | `_FilteredUvicornServer` subclass installs filter AFTER uvicorn startup (run_ui.py) |
+| Log interleaving (#21) | Done | Access log redirected from stdout to stderr in `_FilteredUvicornServer.startup()` |
+| MCP import deprecation (#18) | Done | `streamablehttp_client` → `streamable_http_client`; adapted to new API (mcp_handler.py) |
+| Tool error streak loop (#22) | Done | Consecutive tool error detection (3× same tool fails → break loop) in agent.py |
 
 ---
 
@@ -284,26 +288,33 @@ POST /mcp/t-.../sse HTTP/1.1" 405 Method Not Allowed
 - **Impact:** MCP tool listing fails for google_workspace on every startup. archon and crawl4ai_rag unaffected.
 - **Opportunity:** (a) Start the workspace-mcp server on the host (e.g. `workspace-mcp --port 8000`), (b) update the URL to the correct host/port/scheme, or (c) remove the `google_workspace` entry from user settings if not currently needed.
 
-### 18. MCP `streamablehttp_client` import deprecated
+### 18. MCP `streamablehttp_client` import deprecated ✅ FIXED
 
 - **Observation:** `DeprecationWarning: Use streamable_http_client instead.` logged at startup from `mcp_handler.py:33`.
 - **Root cause:** `mcp_handler.py` imports `streamablehttp_client` (old name) from `mcp.client.streamable_http`. The mcp package renamed it to `streamable_http_client`.
-- **Impact:** Low — works but will break when the old name is removed.
-- **Opportunity:** Update import in `mcp_handler.py` from `streamablehttp_client` to `streamable_http_client` and update the call site.
+- **Fixed:** Renamed import to `streamable_http_client` and updated call site. New API takes `http_client: httpx.AsyncClient` instead of individual `headers`/`timeout`/`httpx_client_factory` params — adapted `_create_stdio_transport` to build the client via `CustomHTTPClientFactory` and pass it directly.
 
-### 20. Health check filter not working — `_HealthCheckAccessLogFilter` bypassed
+### 20. Health check filter not working — `_HealthCheckAccessLogFilter` bypassed ✅ FIXED
 
 - **Observation:** `GET /health HTTP/1.1" 200 OK` still appears in logs (20× in 10 minutes) despite `_HealthCheckAccessLogFilter` being defined (`run_ui.py:41`) and installed (`run_ui.py:562`).
-- **Root cause (likely):** Uvicorn's `Server.startup()` calls `config.configure_logging()` which reconfigures the `uvicorn.access` logger — this may remove or reset filters added before `.run()` is called. The filter is installed at line 562, right before `server.run()` at line 567.
-- **Impact:** Medium — health checks (~every 30s) dominate log output and cause log interleaving (see #21).
-- **Opportunity:** Install the filter AFTER uvicorn finishes its logger setup. Options: (a) subclass `uvicorn.Server`, override `startup()` to add filter post-configure; (b) use a `log_config` dict in `uvicorn.Config` that includes the filter; (c) schedule a delayed `addFilter()` call via `asyncio.get_event_loop().call_later()` after startup completes.
+- **Root cause:** Uvicorn's `Server.startup()` calls `config.configure_logging()` which reconfigures the `uvicorn.access` logger — removing filters added before `.run()`.
+- **Fixed:** Created `_FilteredUvicornServer(uvicorn.Server)` subclass that overrides `startup()` to install the health filter AFTER `super().startup()` completes (after uvicorn configures its loggers). Filter is now guaranteed to persist.
 
-### 21. Log interleaving corrupts agent JSON output (SEVERE)
+### 21. Log interleaving corrupts agent JSON output (SEVERE) ✅ FIXED
 
-- **Observation:** Uvicorn access log lines inject mid-token into the agent's streaming JSON output on stdout. Example: `"tool_name": "code_executionINFO:     127.0.0.1:47376 - "GET /health HTTP/1.1" 200 OK\n_tool"` — the value `code_execution_tool` is split with a health check line between `code_execution` and `_tool`.
-- **Root cause:** Agent streaming output and uvicorn access log both write to stdout without synchronization. Python's stdout is line-buffered for TTY but unbuffered/block-buffered in Docker (no TTY). Concurrent writes from different threads interleave at arbitrary byte boundaries.
-- **Impact:** HIGH — corrupts JSON tool call data in logs; may cause parsing failures if streamed output is consumed programmatically. Makes log analysis unreliable.
-- **Opportunity:** (a) Fix #20 first — eliminating health checks removes the most frequent interleaver; (b) route uvicorn access log to a separate file (e.g. `/var/log/uvicorn-access.log`); (c) use `log_config` in uvicorn.Config to direct access logs to a FileHandler; (d) wrap stdout writes with a threading lock in the log handler.
+- **Observation:** Uvicorn access log lines inject mid-token into the agent's streaming JSON output on stdout.
+- **Root cause:** Agent streaming output and uvicorn access log both write to stdout (fd 1) without synchronization. Concurrent writes from different threads interleave at arbitrary byte boundaries.
+- **Fixed:** `_FilteredUvicornServer.startup()` redirects the access log handler from `sys.stdout` to `sys.stderr` after uvicorn configures its loggers. Access logs now write to fd 2, agent output stays on fd 1 — no byte-level interleaving. Both streams still appear in `docker logs` but on different file descriptors.
+
+### 22. Agent stuck in SyntaxError retry loop (code_execution_tool) ✅ FIXED
+
+- **Observation:** GLM-4.7-Flash generates broken Python (e.g. `p_title.font.size Pt(54)` missing `=`), gets SyntaxError, regenerates near-identical broken code endlessly. CPU spiked to 1143%. Fluxbox crash-loop noise (11,190 of 12,075 log lines) masked the real issue.
+- **Root cause:** Existing loop detection checks (250-char block repeat, exact multi-turn match, 20 max iterations) miss this pattern because the code varies slightly each iteration while the *error* is identical. The model never learns from the error.
+- **Fixed:** Added consecutive tool error streak detection to `agent.py`:
+  - `LoopData` tracks `tool_error_streak` (count), `tool_error_streak_name` (tool), `TOOL_ERROR_STREAK_MAX` (3)
+  - After each tool execution, checks response for error patterns (`SyntaxError`, `IndentationError`, `NameError`, `TypeError`, `ModuleNotFoundError`, `FileNotFoundError`)
+  - If same tool fails 3× consecutively with matching error patterns, breaks the loop with a warning message telling the agent to try a different approach
+  - Counter resets on success or tool change
 
 ---
 
@@ -342,29 +353,29 @@ From **Issues observed**, **Opportunities**, and **Monitor runs** (2026-02-18, 2
 
 **Synced to Archon:** All 11 items created as tasks in A0 SIP project (`610ae854-2244-4cb8-a291-1e31561377ab`), feature `improve-md`. List/update via `python scripts/archon_api_tasks.py list --project-id 610ae854-2244-4cb8-a291-1e31561377ab` and `update TASK_ID --status done`.
 
-| # | Action | Source | Owner |
-|---|--------|--------|--------|
-| 1 | Downgrade WebSocket auth log when no session: log at DEBUG or rate-limit "session not valid" line | #2 | — |
-| 2 | Document or implement OAuth: add `/.well-known/oauth-authorization-server` if IDE OAuth desired; else document that 404 is expected | #3 | — |
-| 3 | Document MCP SSE method: state that SSE is GET-only; optionally return 405 with `Allow: GET` or short explanatory body | #4 | — |
-| 4 | Package deprecations: upgrade faiss/numpy, pathspec (use `gitignore` pattern), LiteLLM (`.model_dump()`); add CI or script to report deprecations from logs | #5 | Done (pathspec + litellm); faiss/numpy upstream |
-| 5 | Log structure: introduce structured logging (JSON with logger/source) or separate app vs HTTP to different streams/files | #6 | — |
-| 6 | code_execution_tool: verify Drive knowledge recall in next Drive-related run; consider buffering/validating complete code before execution to avoid truncated stream | #8 | — |
-| 7 | LiteLLM: upgrade to latest; monitor for unawaited coroutine / dropped streaming | #11 | — |
-| 8 | Playwright: document or automate re-running `playwright install chromium` after venv/Playwright pip upgrades | #12 | — |
-| 9 | Health filter: verify `_HealthCheckAccessLogFilter` is active in running image (restart/rebuild if needed); confirm when `uvicorn_access_logs_enabled` is True | Monitor 2026-02-18 | — |
-| 10 | Google API in main venv: add `google-auth` / `google-api-python-client` to main venv for `runtime: "python"` Drive/Gmail snippets, or document in `google_apis.md` that project venv is required | Monitor 2026-02-18 | — |
-| 11 | Knowledge files: extend `google_apis.md` pattern to other pre-installed tools, MCP servers, and scripts so the agent doesn’t recreate them | Opportunities | — |
-| 12 | Invalid HTTP request: consider suppressing or downgrading uvicorn "Invalid HTTP request received" when from known probes (healthcheck/scanner) | Monitor 2026-03-03 | — |
-| 13 | MCP RequestResponder: ensure notifications (e.g. notifications/cancelled on timeout) are sent inside context manager; fix or report upstream (fastmcp/mcp) | Monitor 2026-03-03 | — |
-| 14 | code_execution / Playwright: document corrupted project venv recovery; consider using main venv or container Playwright when project venv Python is broken | Monitor 2026-03-03 | — |
-| 15 | fluxbox restart loop: add minimal ~/.fluxbox config or set autostart=false and start on VNC use to stop "exited (exit status 1)" / "Failed to read: session.*" spam | Monitor 2026-03-03 (evening) | — |
-| 16 | Google OAuth: clarify in knowledge (google_apis.md or GMAIL_OAUTH_SETUP) that token.json holds refresh_token/access token, credentials.json holds client_id/client_secret only | Monitor 2026-03-03 (credential) | — |
-| 17 | google_workspace MCP: fix or remove entry in user settings — port 8000 is PCI-ASSISTANT (SSL), not workspace-mcp. Either start workspace-mcp, fix URL/scheme, or remove entry | #17 | — |
-| 18 | MCP `streamablehttp_client` → `streamable_http_client`: update import in `mcp_handler.py:33` and call site to use new name before old is removed | #18 | — |
-| 19 | autocutsel startup race: add `depends_on=xvfb` or increase `startsecs` from 0 to 3 in supervisor config so it waits for display before starting | #10 (improvement) | — |
-| 20 | Health filter bypass: `_HealthCheckAccessLogFilter` not working — uvicorn `configure_logging()` likely resets filters. Install filter AFTER uvicorn startup, not before `.run()` | #20 | — |
-| 21 | Log interleaving corrupts JSON (SEVERE): uvicorn access log injects mid-token into agent streaming output. Fix #20 first, then route access log to separate file or add stdout write lock | #21 | — |
+| # | Action | Source | Owner | Status |
+|---|--------|--------|--------|--------|
+| 1 | Downgrade WebSocket auth log when no session: log at DEBUG or rate-limit "session not valid" line | #2 | Claude Code | ✅ Done (2026-03-04) |
+| 2 | Document or implement OAuth: add `/.well-known/oauth-authorization-server` if IDE OAuth desired; else document that 404 is expected | #3 | Claude Code | ✅ Done (2026-03-04) |
+| 3 | Document MCP SSE method: state that SSE is GET-only; optionally return 405 with `Allow: GET` or short explanatory body | #4 | Claude Code | ✅ Done (2026-03-04) |
+| 4 | Package deprecations: upgrade faiss/numpy, pathspec (use `gitignore` pattern), LiteLLM (`.model_dump()`); add CI or script to report deprecations from logs | #5 | Done (pathspec + litellm); faiss/numpy upstream | ⚠️ Partial — browser-use 0.5.11→0.11.13, litellm 1.63.2→1.79.3, pypdf secure 6.7.5; full litellm 1.82.0 blocked by unknown dependency (2026-03-04) |
+| 5 | Log structure: introduce structured logging (JSON with logger/source) or separate app vs HTTP to different streams/files | #6 | — | — |
+| 6 | code_execution_tool: verify Drive knowledge recall in next Drive-related run; consider buffering/validating complete code before execution to avoid truncated stream | #8 | Claude Code | ✅ ast.parse validation (2026-03-04) |
+| 7 | LiteLLM: upgrade to latest; monitor for unawaited coroutine / dropped streaming | #11 | Claude Code | ⚠️ Partial — browser-use 0.5.11→0.11.13 resolves openai conflict, litellm 1.63.2→1.79.3; full 1.82.0 blocked by unknown dependency (2026-03-04) |
+| 8 | Playwright: document or automate re-running `playwright install chromium` after venv/Playwright pip upgrades | #12 | Claude Code | ✅ Done — docs/troubleshooting/playwright_upgrade.md (2026-03-04) |
+| 9 | Health filter: verify `_HealthCheckAccessLogFilter` is active in running image (restart/rebuild if needed); confirm when `uvicorn_access_logs_enabled` is True | Monitor 2026-02-18 | — | — |
+| 10 | Google API in main venv: add `google-auth` / `google-api-python-client` to main venv for `runtime: "python"` Drive/Gmail snippets, or document in `google_apis.md` that project venv is required | Monitor 2026-02-18 | Claude Code | ✅ Done — requirements.txt (2026-03-04) |
+| 11 | Knowledge files: extend `google_apis.md` pattern to other pre-installed tools, MCP servers, and scripts so the agent doesn't recreate them | Opportunities | Claude Code | ✅ Done — knowledge/main/{mcp_servers,preinstalled_tools}.md (2026-03-04) |
+| 12 | Invalid HTTP request: consider suppressing or downgrading uvicorn "Invalid HTTP request received" when from known probes (healthcheck/scanner) | Monitor 2026-03-03 | — | — |
+| 13 | MCP RequestResponder: ensure notifications (e.g. notifications/cancelled on timeout) are sent inside context manager; fix or report upstream (fastmcp/mcp) | Monitor 2026-03-03 | Claude Code | ✅ Done — python/helpers/mcp_server.py (2026-03-04) |
+| 14 | code_execution / Playwright: document corrupted project venv recovery; consider using main venv or container Playwright when project venv Python is broken | Monitor 2026-03-03 | Claude Code | ✅ Done — docs/troubleshooting/venv_recovery.md (2026-03-04) |
+| 15 | fluxbox restart loop: add minimal ~/.fluxbox config or set autostart=false and start on VNC use to stop "exited (exit status 1)" / "Failed to read: session.*" spam | Monitor 2026-03-03 (evening) | Background agent | ✅ Done — docker/run/fs/root/.fluxbox/init (2026-03-03) |
+| 16 | Google OAuth: clarify in knowledge (google_apis.md or GMAIL_OAUTH_SETUP) that token.json holds refresh_token/access token, credentials.json holds client_id/client_secret only | Monitor 2026-03-03 (credential) | Claude Code | ✅ Done — docs/guides/GOOGLE_OAUTH_FILES.md (2026-03-04) |
+| 17 | google_workspace MCP: fix or remove entry in user settings — port 8000 is PCI-ASSISTANT (SSL), not workspace-mcp. Either start workspace-mcp, fix URL/scheme, or remove entry | #17 | — | — |
+| 18 | MCP `streamablehttp_client` → `streamable_http_client`: update import in `mcp_handler.py:33` and call site to use new name before old is removed | #18 | Cursor | ✅ Done (2026-03-03) |
+| 19 | autocutsel startup race: add `depends_on=xvfb` or increase `startsecs` from 0 to 3 in supervisor config so it waits for display before starting | #10 (improvement) | Claude Code | ✅ Done — vnc.conf startsecs=3 (2026-03-04) |
+| 20 | Health filter bypass: `_HealthCheckAccessLogFilter` not working — uvicorn `configure_logging()` likely resets filters. Install filter AFTER uvicorn startup, not before `.run()` | #20 | Cursor | ✅ Done (2026-03-03) |
+| 21 | Log interleaving corrupts JSON (SEVERE): uvicorn access log injects mid-token into agent streaming output. Fix #20 first, then route access log to separate file or add stdout write lock | #21 | Cursor | ✅ Done (2026-03-03) |
 
 ---
 
