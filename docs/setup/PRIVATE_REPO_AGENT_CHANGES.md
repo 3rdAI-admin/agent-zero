@@ -114,12 +114,12 @@ The private repo can be used as a **two-way channel**: you (or Cursor) push impr
    ./scripts/setup/git-self-admin.sh push self main
    ```
 
-**Agent Zero:** The agent is instructed to pull from `self` and read **inbox/IMPROVEMENTS_FROM_HUMAN.md** when doing self-improvement or upgrades, and to treat listed items as requested work. The agent uses **GITHUB_TOKEN_SELF** via `./scripts/setup/git-self.sh` for its own push/pull.
+**Agent Zero:** The agent is instructed to pull from `self` and read **inbox/IMPROVEMENTS_FROM_HUMAN.md** when doing self-improvement or upgrades, and to treat listed items as requested work. The agent uses **GITHUB_TOKEN_3rdAI_bill** (or **GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF**) via `./scripts/setup/git-self.sh` for its own push/pull.
 
 | Who            | Token / script |
 |----------------|----------------|
 | You / Cursor   | **GITHUB_TOKEN** → `./scripts/setup/git-self-admin.sh` |
-| Agent Zero     | **GITHUB_TOKEN_SELF** → `./scripts/setup/git-self.sh`   |
+| Agent Zero     | **GITHUB_TOKEN_3rdAI_bill** or **GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF** → `./scripts/setup/git-self.sh`   |
 
 ---
 
@@ -135,18 +135,19 @@ The private repo can be used as a **two-way channel**: you (or Cursor) push impr
 
 ## 7. Agent Zero access (confirm and use)
 
-**Remote:** The `self` remote points to **3rdAI-bill/agent-zero-private-repo**. **GITHUB_TOKEN_SELF** is Agent Zero's credential for this repo—used for **self-improvement, upgrades, and updates** (push/pull by the agent or you).
+**Remote:** The `self` remote points to **3rdAI-bill/agent-zero-private-repo**. Use a 3rdAI-bill token in `.env` for push/pull (self-improvement, upgrades, and updates).
 
-**Add Agent Zero's token to `.env`:**
+**Add the token to `.env` (either name works):**
 
 ```bash
-# Agent Zero's token for the self remote: self-improvement, upgrades, and updates.
-GITHUB_TOKEN_SELF=ghp_xxxxxxxxxxxx
+# 3rdAI-bill token for the self remote (agent-zero-private-repo)
+GITHUB_TOKEN_3rdAI_bill=ghp_xxxxxxxxxxxx
+# or: GITHUB_TOKEN_SELF=ghp_xxx
 ```
 
 **Push/pull using the helper scripts:**
 
-- **Agent Zero** (uses `GITHUB_TOKEN_SELF`):
+- **Agent Zero** (uses `GITHUB_TOKEN_3rdAI_bill` or `GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF`):
   ```bash
   ./scripts/setup/git-self.sh push self main
   ./scripts/setup/git-self.sh pull self main
@@ -166,12 +167,12 @@ GITHUB_TOKEN_SELF=ghp_xxxxxxxxxxxx
 
 If you see refs (e.g. `HEAD`, `refs/heads/main`), access is OK.
 
-**Let Agent Zero push/pull for self-improvement:** When Agent Zero runs git against `self` (for upgrades/updates), it must use **GITHUB_TOKEN_SELF**. That token is specifically for Agent Zero’s self-improvement use, not for general admin.
+**Let Agent Zero push/pull for self-improvement:** When Agent Zero runs git against `self` (for upgrades/updates), it must use **GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF**. That token is specifically for Agent Zero’s self-improvement use, not for general admin.
 
-1. **GITHUB_TOKEN_SELF** must be in the environment where the agent runs (e.g. **Settings → Secrets** or the `.env` loaded by the process).
+1. **GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF** must be in the environment where the agent runs (e.g. **Settings → Secrets** or the `.env` loaded by the process).
 2. The agent should use the script so the correct token is used: `./scripts/setup/git-self.sh push self main` (or pull/fetch as needed).
 
-Once **GITHUB_TOKEN_SELF** is set and the agent uses the script for `self`, Agent Zero has access to the private repo for self-improvement, upgrades, and updates.
+Once **GITHUB_TOKEN_3rdAI_bill or GITHUB_TOKEN_SELF** is set and the agent uses the script for `self`, Agent Zero has access to the private repo for self-improvement, upgrades, and updates.
 
 ## 8. Security notes
 

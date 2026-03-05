@@ -131,8 +131,10 @@ def get_repo_status(repo_path: str) -> dict:
             current_branch = "unknown"
 
         # Check dirty status, excluding A0 metadata
-        def is_a0_file(path: str) -> bool:
-            return path.startswith(".a0proj") or path == ".a0proj"
+        def is_a0_file(path: str | None) -> bool:
+            return path is not None and (
+                path.startswith(".a0proj") or path == ".a0proj"
+            )
 
         # Filter out A0 files from diff and untracked
         changed_files = [d.a_path for d in repo.index.diff(None)] + [

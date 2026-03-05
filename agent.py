@@ -345,6 +345,9 @@ class LoopData:
         self.params_persistent: dict = {}
         self.current_tool = None
         self.stream_repeat_detected = False  # set by stream callback when repeated block seen
+        self.tool_error_streak: int = 0  # consecutive tool execution errors
+        self.tool_error_streak_name: str = ""  # tool name for the current error streak
+        self.TOOL_ERROR_STREAK_MAX: int = 3  # break loop after N consecutive failures of same tool
 
         # override values with kwargs
         for key, value in kwargs.items():
@@ -963,6 +966,43 @@ class Agent:
 
                     if response.break_loop:
                         return response.message
+
+                    # Reason: detect when the same tool fails repeatedly with
+                    # errors (e.g., SyntaxError in code_execution_tool). The
+                    # LLM often regenerates the same broken code, burning
+                    # iterations without progress. Break after N consecutive
+                    # failures of the same tool.
+                    _ERROR_PATTERNS = (
+                        "SyntaxError",
+                        "IndentationError",
+                        "NameError",
+                        "TypeError",
+                        "ModuleNotFoundError",
+                        "FileNotFoundError",
+                    )
+                    _resp_text = response.message or ""
+                    _has_error = any(p in _resp_text for p in _ERROR_PATTERNS)
+                    if _has_error and tool_name == self.loop_data.tool_error_streak_name:
+                        self.loop_data.tool_error_streak += 1
+                    elif _has_error:
+                        self.loop_data.tool_error_streak = 1
+                        self.loop_data.tool_error_streak_name = tool_name
+                    else:
+                        self.loop_data.tool_error_streak = 0
+                        self.loop_data.tool_error_streak_name = ""
+
+                    if self.loop_data.tool_error_streak >= self.loop_data.TOOL_ERROR_STREAK_MAX:
+                        streak_msg = (
+                            f"Tool '{tool_name}' has failed {self.loop_data.tool_error_streak} "
+                            f"times in a row with the same type of error. Stopping to avoid "
+                            f"an infinite retry loop. Please review the error and try a "
+                            f"different approach."
+                        )
+                        self.hist_add_warning(streak_msg)
+                        PrintStyle(font_color="orange", padding=True).print(streak_msg)
+                        self.context.log.log(type="warning", content=streak_msg)
+                        self.loop_data.tool_error_streak = 0
+                        return streak_msg
                 finally:
                     self.loop_data.current_tool = None
             else:

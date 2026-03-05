@@ -30,7 +30,7 @@ import httpx
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.message import SessionMessage
 from mcp.types import CallToolResult, ListToolsResult
 from anyio.streams.memory import (
@@ -1161,17 +1161,18 @@ class MCPClientRemote(MCPClientBase):
         client_factory = CustomHTTPClientFactory(verify=server.verify)
         # Check if this is a streaming HTTP type
         if _is_streaming_http_type(server.type):
-            # Use streamable HTTP client
+            # Build an httpx client with headers/timeout for the new streamable_http_client API.
+            http_client = client_factory(
+                headers=server.headers,
+                timeout=httpx.Timeout(float(init_timeout), read=float(tool_timeout)),
+            )
             transport_result = await current_exit_stack.enter_async_context(
-                streamablehttp_client(
+                streamable_http_client(
                     url=server.url,
-                    headers=server.headers,
-                    timeout=timedelta(seconds=init_timeout),
-                    sse_read_timeout=timedelta(seconds=tool_timeout),
-                    httpx_client_factory=client_factory,
+                    http_client=http_client,
                 )
             )
-            # streamablehttp_client returns (read_stream, write_stream, get_session_id_callback)
+            # streamable_http_client returns (read_stream, write_stream, get_session_id_callback)
             read_stream, write_stream, get_session_id_callback = transport_result
 
             # Store session ID callback for potential future use

@@ -75,6 +75,23 @@ The container runs with **OAuth 2.1 multi-user** enabled. Multiple Google accoun
 - Restrict the host credentials dir: `chmod 700 workspace-mcp-credentials`.
 - For bearer tokens (multi-user), use **HTTPS** in production and store tokens in a secrets manager. Restrict port 8889 with a firewall if exposed. See **[docker/workspace-mcp/SECURITY.md](../../docker/workspace-mcp/SECURITY.md)** and **[docker/workspace-mcp/PRODUCTION.md](../../docker/workspace-mcp/PRODUCTION.md)** for details, TLS/reverse-proxy examples (Caddy/nginx), and a production checklist.
 
+## Testing the MCP service
+
+From the host (with the stack running), verify the service is reachable from the agent-zero container:
+
+```bash
+# Root should return 200
+docker exec agent-zero curl -sS -o /dev/null -w "%{http_code}" "http://workspace_mcp:8889/"
+
+# /mcp returns 401 without a bearer token (expected — endpoint is protected)
+docker exec agent-zero curl -sS -o /dev/null -w "%{http_code}" "http://workspace_mcp:8889/mcp"
+```
+
+- **200** on `/` → service is up and reachable.
+- **401** on `/mcp` → streamable-http endpoint is up and correctly requiring authentication (OAuth/bearer token).
+
+After first-time OAuth and adding the server in Settings → MCP, the agent can call the tools with a valid session.
+
 ## See also
 
 - **[Quick setup: single vs multi-credential (remote hosts)](./QUICKSETUP.md)** — Client config examples for local and remote hosts

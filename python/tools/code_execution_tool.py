@@ -173,6 +173,22 @@ class CodeExecution(Tool):
         return self.state
 
     async def execute_python_code(self, session: int, code: str, reset: bool = False):
+        # Validate code completeness to prevent SyntaxError loops from truncated streams
+        # (IMPROVE.md Task 2: FR-3.1)
+        import ast
+
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            error_msg = str(e).lower()
+            incomplete_keywords = ["incomplete", "eof", "unclosed", "unexpected end"]
+            if any(kw in error_msg for kw in incomplete_keywords):
+                warning = f"Code appears incomplete (SyntaxError: {e}). Please provide complete code before execution."
+                PrintStyle.warning(warning)
+                return warning
+            # For other SyntaxErrors (typos, invalid syntax), allow execution to fail normally
+            # so agent sees real error message
+
         escaped_code = shlex.quote(code)
         # Prefer ipython when available; fall back to python3 (IMPROVE.md #0)
         python_runner = shutil.which("ipython") or "python3"

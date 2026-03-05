@@ -1,6 +1,7 @@
 ---
 agent: agent
 description: Build from PRP
+mode: normal
 ---
 
 # Build from PRP

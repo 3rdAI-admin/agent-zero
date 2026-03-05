@@ -6,6 +6,7 @@ from openai import BaseModel
 from pydantic import Field
 import fastmcp
 from fastmcp import FastMCP
+from fastmcp import Context
 import contextvars
 
 from agent import AgentContext, AgentContextType, UserMessage
@@ -96,6 +97,7 @@ This tool is used to send a message to the remote Agent Zero Instance connected 
     },
 )
 async def send_message(
+    ctx: Context,
     message: Annotated[
         str,
         Field(
@@ -139,6 +141,8 @@ async def send_message(
         description="The response from the remote Agent Zero Instance", title="response"
     ),
 ]:
+    # Note: FastMCP @tool decorator already provides ctx in proper request context
+    # No additional wrapping needed (IMPROVE.md Task 9: FR-5.1)
     # Get project name from context variable (set in proxy __call__)
     project_name = _mcp_project_name.get()
 
@@ -176,7 +180,8 @@ async def send_message(
 
     if not message:
         return ToolError(
-            error="Message is required", chat_id=context.id if persistent_chat else ""
+            error="Message is required",
+            chat_id=context.id if persistent_chat else "",
         )
 
     try:
@@ -225,6 +230,7 @@ Always use this tool to finish persistent chat conversations with remote Agent Z
     },
 )
 async def finish_chat(
+    ctx: Context,
     chat_id: Annotated[
         str,
         Field(
@@ -238,6 +244,8 @@ async def finish_chat(
         description="The response from the remote Agent Zero Instance", title="response"
     ),
 ]:
+    # Note: FastMCP @tool decorator already provides ctx in proper request context
+    # No additional wrapping needed (IMPROVE.md Task 9: FR-5.1)
     if not chat_id:
         return ToolError(error="Chat ID is required", chat_id="")
 

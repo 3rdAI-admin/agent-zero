@@ -76,6 +76,17 @@
 - **Fix 4 — `settings.py`:** Increased `mcp_client_init_timeout` default from 10s to 30s.
 - **Verified:** `curl` from inside agent-zero to `http://archon-mcp:8051/mcp` returns HTTP 200 with proper MCP response.
 
+### 2026-03-05: Tool error streak loop detection (#22)
+- **Problem:** GLM-4.7-Flash stuck generating broken Python (e.g. `p_title.font.size Pt(54)` missing `=`), gets SyntaxError, retries endlessly. CPU spiked to 1143%.
+- **Fix:** Added `tool_error_streak` counter to `LoopData` in `agent.py` — tracks consecutive tool execution errors by pattern (SyntaxError, IndentationError, NameError, TypeError, ModuleNotFoundError, FileNotFoundError). After 3 consecutive failures of same tool, breaks loop with warning.
+- **Validated:** 153/153 tests pass, E2E 9/9, hot-deployed to running container.
+
+### 2026-03-03–04: Batch improvements (IMPROVE.md #1–#21)
+- **Code fixes:** Health filter bypass (#20), log interleaving (#21), MCP import deprecation (#18), WebSocket auth log (#1), code validation ast.parse (#6), MCP context manager (#13), autocutsel timing (#19), xvfb crash loop (#10)
+- **Documentation:** OAuth well-known (#2), MCP SSE GET-only (#3), Playwright upgrade (#8), venv recovery (#14), Google OAuth files (#16), knowledge files for tools/MCP (#11)
+- **Dependency upgrades:** browser-use 0.5.11→0.11.13, litellm 1.63.2→1.79.3, pypdf secure 6.7.5
+- **Status:** 17 of 21 action items complete. Remaining: #5 (structured logging), #9 (health filter verify), #12 (invalid HTTP suppress), #17 (google_workspace MCP entry)
+
 ## In Progress
 
 (none)
@@ -125,18 +136,29 @@ Source: `PRPs/zeroclaw-integration-analysis.md` (Revised 2026-02-20)
 
 ### Action items from IMPROVE.md
 
-See **IMPROVE.md** → "Action items (suggested improvements)" for full list. Summary of open items:
+See **IMPROVE.md** → "Action items (suggested improvements)" for full list. Summary:
 
-- [ ] **#2** — WebSocket auth: log "session not valid" at DEBUG or rate-limit (avoid WARNING spam)
-- [ ] **#3** — OAuth: add `/.well-known/oauth-authorization-server` or document 404 expected
-- [ ] **#4** — MCP SSE: document GET-only; optional 405 with `Allow: GET`
-- [x] **#5** — Deprecations: pathspec → gitignore (file_tree, backup), litellm>=1.82.0; faiss/numpy upstream
-- [ ] **#6** — Log structure: structured logging or separate app vs HTTP streams
-- [ ] **#8** — code_execution: verify Drive knowledge recall; buffer/validate complete code
-- [ ] **#11** — LiteLLM: upgrade; monitor unawaited coroutine
-- [ ] **#12** — Playwright: document/automate `playwright install chromium` after pip upgrade
-- [ ] **Monitor** — Verify health filter in image; Google API in main venv or document project venv
-- [ ] **Knowledge** — Extend google_apis.md pattern to other tools/MCP/scripts
+- [x] **#1** — WebSocket auth: log at DEBUG for pre-login (2026-03-04)
+- [x] **#2** — OAuth: documented 404 expected in MCP_CLIENT_CONNECTION.md (2026-03-04)
+- [x] **#3** — MCP SSE: documented GET-only in mcp-setup.md (2026-03-04)
+- [x] **#4/#7** — Deps: browser-use 0.11.13, litellm 1.79.3; full 1.82.0 blocked (2026-03-04)
+- [ ] **#5** — Log structure: structured logging or separate app vs HTTP streams
+- [x] **#6** — code_execution: ast.parse validation (2026-03-04)
+- [x] **#8** — Playwright: docs/troubleshooting/playwright_upgrade.md (2026-03-04)
+- [ ] **#9** — Verify health filter in running image
+- [x] **#10** — Google API in main venv: requirements.txt (2026-03-04)
+- [x] **#11** — Knowledge files: mcp_servers.md, preinstalled_tools.md (2026-03-04)
+- [ ] **#12** — Invalid HTTP request: suppress for known probes
+- [x] **#13** — MCP context manager: mcp_server.py (2026-03-04)
+- [x] **#14** — Venv recovery: docs/troubleshooting/venv_recovery.md (2026-03-04)
+- [x] **#15** — Fluxbox config: docker/run/fs/root/.fluxbox/init (2026-03-03)
+- [x] **#16** — Google OAuth docs: GOOGLE_OAUTH_FILES.md (2026-03-04)
+- [ ] **#17** — google_workspace MCP: fix/remove entry
+- [x] **#18** — MCP import: streamable_http_client (2026-03-03)
+- [x] **#19** — Autocutsel timing: startsecs=3 (2026-03-04)
+- [x] **#20** — Health filter bypass: _FilteredUvicornServer (2026-03-03)
+- [x] **#21** — Log interleaving: stderr redirect (2026-03-03)
+- [x] **#22** — Tool error streak: agent.py loop detection (2026-03-05)
 
 ## Discovered During Work
 

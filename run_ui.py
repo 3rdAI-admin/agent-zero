@@ -42,13 +42,39 @@ class _HealthCheckAccessLogFilter(logging.Filter):
     """Suppress access log lines for GET /health 200 to reduce log noise from Docker healthcheck."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            msg = record.getMessage()
-        except Exception:
-            return True
-        if " /health " in msg and " 200 " in msg:
-            return False
+        # Reason: uvicorn's AccessFormatter produces args as a tuple:
+        # (client_addr, method, path, http_version, status_code).
+        # Check args directly for reliable matching (status_code is int 200).
+        args = getattr(record, "args", None)
+        if isinstance(args, tuple) and len(args) >= 5:
+            path = args[2] if len(args) > 2 else ""
+            status = args[4] if len(args) > 4 else 0
+            if path == "/health" and status == 200:
+                return False
         return True
+
+
+class _FilteredUvicornServer(uvicorn.Server):
+    """Uvicorn server that installs health filter and redirects access logs AFTER startup.
+
+    Reason: uvicorn's startup() calls config.configure_logging() which resets all
+    logger handlers/filters. Filters added before .run() get wiped. This subclass
+    installs the filter after configure_logging() completes. It also redirects
+    access logs from stdout to stderr so they don't interleave with agent streaming
+    JSON output (which uses stdout), preventing byte-level corruption (issue #21).
+    """
+
+    async def startup(self, sockets: list | None = None) -> None:
+        await super().startup(sockets=sockets)
+        access_logger = logging.getLogger("uvicorn.access")
+        # Install health check filter (fixes #20)
+        access_logger.addFilter(_HealthCheckAccessLogFilter())
+        # Redirect access log from stdout to stderr to prevent interleaving
+        # with agent streaming output on stdout (fixes #21).
+        import sys
+        for handler in access_logger.handlers:
+            if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
+                handler.stream = sys.stderr
 
 
 # Set the new timezone to 'UTC'
@@ -355,9 +381,17 @@ def configure_websocket_namespaces(
                     credentials_hash = login.get_credentials_hash()
                     if credentials_hash:
                         if session.get("authentication") != credentials_hash:
-                            PrintStyle.warning(
-                                f"WebSocket authentication failed for {_namespace} {sid}: session not valid"
-                            )
+                            # Check if session exists before deciding log level
+                            # No session = expected for pre-login clients (healthcheck, browser pre-auth)
+                            # Invalid session = unexpected, needs investigation
+                            if not session.get("authentication"):
+                                PrintStyle.debug(
+                                    f"WebSocket authentication failed for {_namespace} {sid}: no session (expected for pre-login clients)"
+                                )
+                            else:
+                                PrintStyle.warning(
+                                    f"WebSocket authentication failed for {_namespace} {sid}: session not valid"
+                                )
                             return False
                     else:
                         PrintStyle.debug(
@@ -527,7 +561,7 @@ def run():
     http_only = os.environ.get("AGENT_ZERO_HTTP_ONLY", "").strip().lower() in ("1", "true", "yes")
     if http_only:
         scheme = "http"
-        PrintStyle().debug(f"TLS disabled via AGENT_ZERO_HTTP_ONLY")
+        PrintStyle().debug("TLS disabled via AGENT_ZERO_HTTP_ONLY")
     elif os.path.isfile(cert_file) and os.path.isfile(key_file):
         ssl_certfile = cert_file
         ssl_keyfile = key_file
@@ -545,7 +579,7 @@ def run():
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
     )
-    server = uvicorn.Server(config)
+    server = _FilteredUvicornServer(config)
 
     class _UvicornServerWrapper:
         def __init__(self, server: uvicorn.Server):
@@ -556,10 +590,6 @@ def run():
             self._server.should_exit = True
 
     process.set_server(_UvicornServerWrapper(server))
-
-    # Suppress GET /health 200 from access log when enabled (Docker healthcheck every 30s)
-    if _settings.get("uvicorn_access_logs_enabled", False):
-        logging.getLogger("uvicorn.access").addFilter(_HealthCheckAccessLogFilter())
 
     PrintStyle().debug(f"Starting server at {scheme}://{host}:{port} ...")
     threading.Thread(target=wait_for_health, args=(host, port, scheme), daemon=True).start()

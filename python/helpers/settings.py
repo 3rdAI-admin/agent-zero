@@ -672,7 +672,23 @@ def get_default_settings() -> Settings:
         stt_silence_duration=get_default_value("stt_silence_duration", 1000),
         stt_waiting_timeout=get_default_value("stt_waiting_timeout", 2000),
         tts_kokoro=get_default_value("tts_kokoro", True),
-        mcp_servers=get_default_value("mcp_servers", '{\n    "mcpServers": {}\n}'),
+        mcp_servers=get_default_value(
+            "mcp_servers",
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "google_workspace": {
+                            "description": "Gmail, Drive, Docs, Sheets, Calendar, Tasks (container)",
+                            "url": "http://workspace_mcp:8889/mcp",
+                            "type": "streamable-http",
+                            "init_timeout": 30,
+                            "tool_timeout": 120,
+                        }
+                    }
+                },
+                indent=2,
+            ),
+        ),
         mcp_client_init_timeout=get_default_value("mcp_client_init_timeout", 30),
         mcp_client_tool_timeout=get_default_value("mcp_client_tool_timeout", 120),
         mcp_server_enabled=get_default_value("mcp_server_enabled", False),

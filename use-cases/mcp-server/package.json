@@ -1,0 +1,13 @@
+{
+  "name": "mcp-server-use-case",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests yet\"",
+    "test:run": "echo \"No tests yet\""
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

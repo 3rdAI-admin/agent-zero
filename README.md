@@ -164,6 +164,7 @@ docker run -p 50001:80 agent0ai/agent-zero
 | [Contributing](./docs/guides/contribution.md) | How to contribute |
 | [Troubleshooting](./docs/guides/troubleshooting.md) | Common issues and their solutions |
 
+**Context Engineering (slash commands):** Available in Cursor, Claude Code, and VS Code Copilot: `/new-project`, `/generate-prd`, `/generate-prp`, `/build-prp`, `/execute-prp`, `/generate-prompt`, `/generate-validate`, `/validate`, `/validate-project`, `/revise-prp`, `/summarize`.
 
 ## 🎯 Changelog
 

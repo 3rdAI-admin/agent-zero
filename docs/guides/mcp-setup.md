@@ -83,6 +83,9 @@ In the JSON editor, add your MCP server configuration. Here's a simple example:
 }
 ```
 
+> [!IMPORTANT]
+> **MCP SSE Endpoints**: MCP SSE (Server-Sent Events) endpoints are **GET-only**. POST requests will return `405 Method Not Allowed`. Ensure your MCP client is configured to use GET method for SSE transport. If you see 405 errors, check your client configuration.
+
 ## Google Workspace MCP (full workspace)
 
 For **Gmail, Drive, Docs, Sheets, Slides, Calendar, Tasks, and more** in one MCP server, use [Google Workspace MCP](https://workspacemcp.com/) (`workspace-mcp`). It uses OAuth 2.1 and supports stdio or streamable HTTP.

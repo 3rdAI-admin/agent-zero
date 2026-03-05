@@ -1,6 +1,7 @@
 ---
 agent: agent
 description: Execute BASE PRP
+mode: normal
 ---
 
 # Execute BASE PRP

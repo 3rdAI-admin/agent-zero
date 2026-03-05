@@ -1,6 +1,7 @@
 ---
 agent: agent
 description: Revise PRP: Feedback Loop from Validation to Planning
+mode: normal
 ---
 
 # Revise PRP: Feedback Loop from Validation to Planning

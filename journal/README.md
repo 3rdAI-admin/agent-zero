@@ -13,3 +13,5 @@
 - 2026-02-18 | validate-project | Fail → Pass (P1–P4) → Pass (post-docs-update, all phases)
 - 2026-03-04 | validate-project --thorough | Pass (153/153 tests; E:0 W:0; E2E 9/9; batch improvements)
 - 2026-03-04 | validate-project --thorough | Pass (153/153 tests; E:0 W:1; E2E 9/9; post-upgrade: browser-use 0.11.13, litellm 1.79.3)
+- 2026-03-05 | validate-project --thorough | Pass (153/153 tests; E:0 W:0; E2E 9/9; tool error streak fix deployed)
+- 2026-03-05 | validate-project | Pass (153/153; P1–P5; post self-repo/inbox channel)
