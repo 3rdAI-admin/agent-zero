@@ -900,6 +900,14 @@ class Agent:
             raw_tool_name = tool_request.get("tool_name", tool_request.get("tool",""))  # Get the raw tool name
             tool_args = tool_request.get("tool_args", tool_request.get("args", {}))
 
+            # Fallback: if tool_args is empty and the model put args at top level (e.g. "text", "message"),
+            # extract non-meta keys as tool_args so smaller models work without strict format adherence.
+            if not tool_args and raw_tool_name:
+                _META_KEYS = {"tool_name", "tool", "tool_args", "args", "headline", "thoughts"}
+                flat_args = {k: v for k, v in tool_request.items() if k not in _META_KEYS}
+                if flat_args:
+                    tool_args = flat_args
+
             tool_name = raw_tool_name  # Initialize tool_name with raw_tool_name
             tool_method = None  # Initialize tool_method
 
@@ -942,8 +950,19 @@ class Agent:
                 try:
                     await self.handle_intervention()
 
-                    # Call tool hooks for compatibility
-                    await tool.before_execution(**tool_args)
+                    # Call tool hooks for compatibility (includes policy check)
+                    try:
+                        await tool.before_execution(**tool_args)
+                    except Exception as _policy_err:
+                        from python.helpers.tool import PolicyViolation
+
+                        if isinstance(_policy_err, PolicyViolation):
+                            _deny_msg = f"[Policy] {_policy_err}"
+                            self.hist_add_tool_result(tool_name, _deny_msg)
+                            PrintStyle(font_color="orange", padding=True).print(_deny_msg)
+                            self.context.log.log(type="warning", content=_deny_msg)
+                            return _deny_msg
+                        raise
                     await self.handle_intervention()
 
                     # Allow extensions to preprocess tool arguments
@@ -955,6 +974,20 @@ class Agent:
 
                     response = await tool.execute(**tool_args)
                     await self.handle_intervention()
+
+                    # Append-only audit log for tool executions (SAFETY-03)
+                    try:
+                        from python.helpers import audit_log
+
+                        audit_log.log_tool_execution(
+                            tool_name=tool_name,
+                            tool_args=tool_args or {},
+                            context_id=context_helper.get_context_data(
+                                "agent_context_id", ""
+                            ) or None,
+                        )
+                    except Exception:
+                        pass
 
                     # Allow extensions to postprocess tool response
                     await self.call_extensions(
