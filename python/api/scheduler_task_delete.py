@@ -1,5 +1,5 @@
 from python.helpers.api import ApiHandler, Input, Output, Request
-from python.helpers.task_scheduler import TaskScheduler, TaskState
+from python.helpers.task_scheduler import TaskScheduler, TaskState, ScheduledTask
 from python.helpers.localization import Localization
 from agent import AgentContext
 from python.helpers import persist_chat
@@ -48,6 +48,12 @@ class SchedulerTaskDelete(ApiHandler):
             persist_chat.remove_chat(context.id)
 
         # Remove the task
+        was_scheduled = isinstance(task, ScheduledTask)
         await scheduler.remove_task_by_uuid(task_id)
+
+        if was_scheduled:
+            from python.helpers.autonomy_scheduler import AutonomyScheduler
+
+            AutonomyScheduler.get().sync_scheduled_tasks()
 
         return {"success": True, "message": f"Task {task_id} deleted successfully"}

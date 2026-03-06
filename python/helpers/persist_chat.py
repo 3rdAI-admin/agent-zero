@@ -1,10 +1,11 @@
 from collections import OrderedDict
 from datetime import datetime
+import json
+import os
 from typing import Any
 import uuid
 from agent import Agent, AgentConfig, AgentContext, AgentContextType
 from python.helpers import files, history
-import json
 from initialize import initialize_agent
 
 from python.helpers.log import Log, LogItem
@@ -105,10 +106,37 @@ def export_json_chat(context: AgentContext):
     return js
 
 
+def _collect_attachment_filenames_from_chat_file(chat_file_path: str) -> list[str]:
+    """Read chat.json and return list of attachment filenames referenced in log items."""
+    filenames: list[str] = []
+    if not files.exists(chat_file_path):
+        return filenames
+    try:
+        js = files.read_file(chat_file_path)
+        data = json.loads(js)
+    except Exception:
+        return filenames
+    for item in data.get("log", {}).get("logs", []):
+        kvps = item.get("kvps") or {}
+        for name in kvps.get("attachments", []):
+            if isinstance(name, str) and name and "/" not in name and "\\" not in name:
+                filenames.append(name)
+    return filenames
+
+
 def remove_chat(ctxid):
-    """Remove a chat or task context"""
-    path = get_chat_folder_path(ctxid)
-    files.delete_dir(path)
+    """Remove a chat or task context and any uploads referenced only in that chat."""
+    chat_folder = get_chat_folder_path(ctxid)
+    chat_file = _get_chat_file_path(ctxid)
+    attachment_filenames = _collect_attachment_filenames_from_chat_file(chat_file)
+    files.delete_dir(chat_folder)
+    for name in attachment_filenames:
+        try:
+            candidate = files.get_abs_path("usr", "uploads", name)
+            if files.is_in_base_dir(candidate) and files.exists(candidate):
+                os.remove(candidate)
+        except (OSError, ValueError):
+            pass
 
 
 def remove_msg_files(ctxid):

@@ -20,11 +20,20 @@
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required>
             </div>
-            <button type="submit">Login</button>
+            <button type="submit" id="login-btn">Login</button>
             {% if error %}
                 <p class="error">{{ error }}</p>
             {% endif %}
         </form>
     </div>
+    <script>
+        document.querySelector('.login-form').addEventListener('submit', function() {
+            var btn = document.getElementById('login-btn');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.textContent = 'Logging in…';
+            }
+        });
+    </script>
 </body>
 </html>

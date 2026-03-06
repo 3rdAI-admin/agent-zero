@@ -19,18 +19,16 @@ class ImageGet(ApiHandler):
         if not path:
             raise ValueError("No path provided")
 
-        # no real need to check, we have the extension filter in place
-        # check if path is within base directory
-        # if runtime.is_development():
-        #     in_base = files.is_in_base_dir(files.fix_dev_path(path))
-        # else:
-        #     in_base = files.is_in_base_dir(path)
-        # if not in_base and not files.is_in_dir(path, "/root"):
-        #     raise ValueError("Path is outside of allowed directory")
+        try:
+            safe_abs = files.resolve_under_base(path)
+        except ValueError:
+            raise ValueError("Path is outside of allowed directory")
 
+        # Use relative path for files.* helpers that expect base-relative paths
+        path_under_base = files.deabsolute_path(safe_abs)
         # get file extension and info
-        file_ext = os.path.splitext(path)[1].lower()
-        filename = os.path.basename(path)
+        file_ext = os.path.splitext(safe_abs)[1].lower()
+        filename = os.path.basename(safe_abs)
 
         # list of allowed image extensions
         image_extensions = [
@@ -52,11 +50,13 @@ class ImageGet(ApiHandler):
         if file_ext in image_extensions:
             # in development environment, try to serve the image from local file system if exists, otherwise from docker
             if runtime.is_development():
-                if files.exists(path):
-                    response = send_file(path)
-                elif await runtime.call_development_function(files.exists, path):
+                if os.path.exists(safe_abs):
+                    response = send_file(safe_abs)
+                elif await runtime.call_development_function(
+                    files.exists, path_under_base
+                ):
                     b64_content = await runtime.call_development_function(
-                        files.read_file_base64, path
+                        files.read_file_base64, path_under_base
                     )
                     file_content = base64.b64decode(b64_content)
                     mime_type, _ = guess_type(filename)
@@ -71,8 +71,8 @@ class ImageGet(ApiHandler):
                 else:
                     response = _send_fallback_icon("image")
             else:
-                if files.exists(path):
-                    response = send_file(path)
+                if os.path.exists(safe_abs):
+                    response = send_file(safe_abs)
                 else:
                     response = _send_fallback_icon("image")
 

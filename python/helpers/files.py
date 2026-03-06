@@ -404,6 +404,7 @@ def is_full_json_template(text):
 
 def write_file(relative_path: str, content: str, encoding: str = "utf-8"):
     abs_path = get_abs_path(relative_path)
+    check_governance_write(abs_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     content = sanitize_string(content, encoding)
     with open(abs_path, "w", encoding=encoding) as f:
@@ -412,6 +413,7 @@ def write_file(relative_path: str, content: str, encoding: str = "utf-8"):
 
 def write_file_bin(relative_path: str, content: bytes):
     abs_path = get_abs_path(relative_path)
+    check_governance_write(abs_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     with open(abs_path, "wb") as f:
         f.write(content)
@@ -421,6 +423,7 @@ def write_file_base64(relative_path: str, content: str):
     # decode base64 string to bytes
     data = base64.b64decode(content)
     abs_path = get_abs_path(relative_path)
+    check_governance_write(abs_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     with open(abs_path, "wb") as f:
         f.write(data)
@@ -429,6 +432,7 @@ def write_file_base64(relative_path: str, content: str):
 def delete_dir(relative_path: str):
     # ensure deletion of directory without propagating errors
     abs_path = get_abs_path(relative_path)
+    check_governance_write(abs_path)
     if os.path.exists(abs_path):
         # first try with ignore_errors=True which is the safest option
         shutil.rmtree(abs_path, ignore_errors=True)
@@ -512,6 +516,23 @@ def get_abs_path(*relative_paths):
     return os.path.join(get_base_dir(), *relative_paths)
 
 
+def resolve_under_base(path: str) -> str:
+    """
+    Resolve a (possibly user-supplied) path to an absolute path under the base
+    directory. Prevents path traversal; raises ValueError if result escapes base.
+    Use this for any path coming from user input or API args.
+    """
+    base = get_base_dir()
+    # Prevent absolute path from escaping: normalize so we always join under base
+    if path.startswith("/") or (os.path.altsep and path.startswith(os.path.altsep)):
+        path = path.lstrip("/").lstrip(os.path.altsep or "")
+    combined = os.path.normpath(os.path.join(base, path))
+    real = os.path.realpath(combined)
+    if not is_in_dir(real, base):
+        raise ValueError("Path is outside of allowed directory")
+    return real
+
+
 def get_abs_path_dockerized(*relative_paths):
     "Ensures the abs path is dockerized (i.e. /a0/... path)"
     abs = get_abs_path(*relative_paths)
@@ -581,6 +602,45 @@ def is_in_dir(path: str, dir: str):
     abs_path = os.path.abspath(path)
     abs_dir = os.path.abspath(dir)
     return os.path.commonpath([abs_path, abs_dir]) == abs_dir
+
+
+# --- Governance directory protection (Phase 2f, SAFETY-03) ---
+
+GOVERNANCE_FOLDER = "usr/governance"
+
+
+def is_governance_path(path: str) -> bool:
+    """Check if a path falls within the governance directory.
+
+    Args:
+        path: Absolute or relative path to check.
+
+    Returns:
+        bool: True if path is inside usr/governance/.
+    """
+    gov_abs = os.path.abspath(get_abs_path(GOVERNANCE_FOLDER))
+    check_abs = os.path.abspath(path)
+    # Reason: also treat the governance dir itself as protected
+    return is_in_dir(check_abs, gov_abs)
+
+
+def check_governance_write(path: str) -> None:
+    """Raise ValueError if path is inside the governance directory.
+
+    Call this before any agent-initiated file write to enforce SAFETY-03:
+    the agent cannot modify governance files (audit log, budgets, policy).
+
+    Args:
+        path: Absolute or relative path to validate.
+
+    Raises:
+        ValueError: If path is inside usr/governance/.
+    """
+    if is_governance_path(path):
+        raise ValueError(
+            f"Write denied: {path!r} is inside the governance directory "
+            f"({GOVERNANCE_FOLDER}/). Agent cannot modify governance files."
+        )
 
 
 def get_subdirectories(

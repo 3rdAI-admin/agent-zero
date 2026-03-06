@@ -1,5 +1,19 @@
+import json
 from agent import AgentContext
 from python.helpers.api import ApiHandler, Request, Response
+
+
+def _parse_length(
+    value: str | int | None, default: int = 100, max_val: int = 1000
+) -> int:
+    """Parse length parameter; return default if invalid, clamp to [1, max_val]."""
+    if value is None:
+        return default
+    try:
+        n = int(value) if not isinstance(value, int) else value
+    except (ValueError, TypeError):
+        return default
+    return max(1, min(n, max_val))
 
 
 class ApiLogGet(ApiHandler):
@@ -23,10 +37,10 @@ class ApiLogGet(ApiHandler):
         # Extract parameters (support both query params for GET and body for POST)
         if request.method == "GET":
             context_id = request.args.get("context_id", "")
-            length = int(request.args.get("length", 100))
+            length = _parse_length(request.args.get("length", 100))
         else:
             context_id = input.get("context_id", "")
-            length = input.get("length", 100)
+            length = _parse_length(input.get("length", 100))
 
         if not context_id:
             return Response(
@@ -68,7 +82,9 @@ class ApiLogGet(ApiHandler):
                 },
             }
 
-        except Exception as e:
+        except Exception:
             return Response(
-                f'{{"error": "{str(e)}"}}', status=500, mimetype="application/json"
+                json.dumps({"error": "An error occurred retrieving the log"}),
+                status=500,
+                mimetype="application/json",
             )

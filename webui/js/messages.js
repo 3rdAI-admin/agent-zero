@@ -621,6 +621,7 @@ export function _drawMessage({
       processedContent = convertImgFilePaths(processedContent);
       processedContent = convertFilePaths(processedContent);
       processedContent = marked.parse(processedContent, { breaks: true });
+      processedContent = sanitizeMarkdownHtml(processedContent);
       processedContent = convertPathsToLinks(processedContent);
       processedContent = addBlankTargetsToLinks(processedContent);
 
@@ -1632,6 +1633,8 @@ function convertFilePaths(str) {
 }
 
 function escapeHTML(str) {
+  if (str == null) return "";
+  const s = String(str);
   const escapeChars = {
     "&": "&amp;",
     "<": "&lt;",
@@ -1639,7 +1642,26 @@ function escapeHTML(str) {
     "'": "&#39;",
     '"': "&quot;",
   };
-  return str.replace(/[&<>'"]/g, (char) => escapeChars[char]);
+  return s.replace(/[&<>'"]/g, (char) => escapeChars[char]);
+}
+
+/** Escape string for use inside a single-quoted HTML attribute (e.g. onclick="openFileLink('...')"). */
+function escapeAttrSingleQuoted(str) {
+  if (str == null) return "";
+  return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Minimal sanitization of HTML from marked output to prevent XSS (script, event handlers).
+ * Does not allow script tags or on* attributes.
+ */
+function sanitizeMarkdownHtml(html) {
+  if (typeof html !== "string") return "";
+  let out = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  out = out.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, "");
+  out = out.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, "");
+  out = out.replace(/href\s*=\s*["']\s*javascript:\s*[^"']*["']/gi, 'href="#"');
+  return out;
 }
 
 function convertPathsToLinks(str) {
@@ -1650,7 +1672,9 @@ function convertPathsToLinks(str) {
     let html = "";
     for (const part of parts) {
       conc += "/" + part;
-      html += `/<a href="#" class="path-link" onclick="openFileLink('${conc}');">${part}</a>`;
+      const safeConc = escapeAttrSingleQuoted(conc);
+      const safePart = escapeHTML(part);
+      html += `/<a href="#" class="path-link" onclick="openFileLink('${safeConc}');">${safePart}</a>`;
     }
     return html;
   }

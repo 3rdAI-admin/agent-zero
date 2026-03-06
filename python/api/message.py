@@ -46,7 +46,7 @@ class Message(ApiHandler):
                     attachment_paths.append(os.path.join(upload_folder_int, filename))
         else:
             # Handle JSON request as before
-            input_data = request.get_json()
+            input_data = request.get_json() or {}
             text = input_data.get("text", "")
             ctxid = input_data.get("context", "")
             message_id = input_data.get("message_id", None)

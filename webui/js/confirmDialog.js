@@ -6,6 +6,13 @@ const DIALOG_TYPES = {
   info: { icon: 'info', color: 'var(--color-primary, #3b82f6)' }
 };
 
+function escapeHtml(str) {
+  if (str == null) return "";
+  const s = String(str);
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return s.replace(/[&<>"']/g, (c) => map[c]);
+}
+
 export function showConfirmDialog(options) {
   const {
     title = 'Confirm',
@@ -16,6 +23,10 @@ export function showConfirmDialog(options) {
   } = options;
 
   const typeConfig = DIALOG_TYPES[type] || DIALOG_TYPES.warning;
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+  const safeConfirmText = escapeHtml(confirmText);
+  const safeCancelText = escapeHtml(cancelText);
 
   return new Promise((resolve) => {
     // Create backdrop
@@ -28,12 +39,12 @@ export function showConfirmDialog(options) {
     dialog.innerHTML = `
       <div class="confirm-dialog-header">
         <span class="confirm-dialog-icon material-symbols-outlined" style="color: ${typeConfig.color}">${typeConfig.icon}</span>
-        <span class="confirm-dialog-title">${title}</span>
+        <span class="confirm-dialog-title">${safeTitle}</span>
       </div>
-      <div class="confirm-dialog-body">${message}</div>
+      <div class="confirm-dialog-body">${safeMessage}</div>
       <div class="confirm-dialog-footer">
-        <button class="button cancel confirm-dialog-cancel">${cancelText}</button>
-        <button class="button confirm confirm-dialog-confirm">${confirmText}</button>
+        <button class="button cancel confirm-dialog-cancel">${safeCancelText}</button>
+        <button class="button confirm confirm-dialog-confirm">${safeConfirmText}</button>
       </div>
     `;
 
