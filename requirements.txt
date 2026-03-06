@@ -20,7 +20,7 @@ litellm>=1.82.0
 langchain-unstructured[all-docs]==0.1.6
 openai-whisper==20250625
 lxml_html_clean>=0.4.0
-markdown==3.7
+markdown>=3.8.1
 mcp>=1.23.1
 newspaper3k==0.2.8
 paramiko==3.5.0
