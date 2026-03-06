@@ -229,11 +229,15 @@ POST /mcp/t-.../sse HTTP/1.1" 405 Method Not Allowed
 
 - **Opportunity:** Add a small “deprecation summary” script or CI step that parses logs and reports these so they can be tracked and addressed over time.
 
-### 6. Log interleaving
+### 6. Log interleaving / structured logging DONE
 
 - **Observation:** Application output (e.g. “Reasoning:”, “Response:”, JSON) and Uvicorn access lines (“INFO: GET /health”) are interleaved on stdout.
 - **Impact:** Harder to grep or parse logs by concern (app vs HTTP).
-- **Opportunity:** Use structured logging (JSON) with a `logger` or `source` field; or separate app logs to a different stream/file (e.g. app to stderr, uvicorn to stdout, or both to files with rotation).
+- **Fixed (2026-03-05):**
+  - Created `python/helpers/structured_log.py` — structured JSON logging module that emits `{“ts”, “level”, “logger”, “msg”, ...extra}` to stderr.
+  - Integrated into `PrintStyle` — all static methods (info, warning, error, debug, hint, success) now emit structured JSON to stderr alongside existing styled console output.
+  - HTTP access logs already on stderr (#21). App structured logs now also on stderr. Agent streaming output stays on stdout. Separation: stdout = agent stream, stderr = structured app + HTTP logs.
+  - Tests: `tests/test_structured_log.py` — 10 tests (formatter, extras, exceptions, serialization, logger factory).
 
 ### 7. Duplicate POST /projects
 
@@ -359,7 +363,7 @@ From **Issues observed**, **Opportunities**, and **Monitor runs** (2026-02-18, 2
 | 2 | Document or implement OAuth: add `/.well-known/oauth-authorization-server` if IDE OAuth desired; else document that 404 is expected | #3 | Claude Code | ✅ Done (2026-03-04) |
 | 3 | Document MCP SSE method: state that SSE is GET-only; optionally return 405 with `Allow: GET` or short explanatory body | #4 | Claude Code | ✅ Done (2026-03-04) |
 | 4 | Package deprecations: upgrade faiss/numpy, pathspec (use `gitignore` pattern), LiteLLM (`.model_dump()`); add CI or script to report deprecations from logs | #5 | Done (pathspec + litellm); faiss/numpy upstream | ⚠️ Partial — browser-use 0.5.11→0.11.13, litellm 1.63.2→1.79.3, pypdf secure 6.7.5; full litellm 1.82.0 blocked by unknown dependency (2026-03-04) |
-| 5 | Log structure: introduce structured logging (JSON with logger/source) or separate app vs HTTP to different streams/files | #6 | — | — |
+| 5 | Log structure: introduce structured logging (JSON with logger/source) or separate app vs HTTP to different streams/files | #6 | Claude Code | Done (2026-03-05) — python/helpers/structured_log.py + PrintStyle integration |
 | 6 | code_execution_tool: verify Drive knowledge recall in next Drive-related run; consider buffering/validating complete code before execution to avoid truncated stream | #8 | Claude Code | ✅ ast.parse validation (2026-03-04) |
 | 7 | LiteLLM: upgrade to latest; monitor for unawaited coroutine / dropped streaming | #11 | Claude Code | ⚠️ Partial — browser-use 0.5.11→0.11.13 resolves openai conflict, litellm 1.63.2→1.79.3; full 1.82.0 blocked by unknown dependency (2026-03-04) |
 | 8 | Playwright: document or automate re-running `playwright install chromium` after venv/Playwright pip upgrades | #12 | Claude Code | ✅ Done — docs/troubleshooting/playwright_upgrade.md (2026-03-04) |

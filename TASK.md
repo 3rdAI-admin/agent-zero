@@ -2,6 +2,13 @@
 
 ## Completed
 
+### 2026-03-05: Structured JSON logging (IMPROVE #5)
+- **New module:** `python/helpers/structured_log.py` — JSON logging to stderr with `{"ts", "level", "logger", "msg", ...extra}` format.
+- **PrintStyle integration:** All static methods (info, warning, error, debug, hint, success) now emit structured JSON via `a0.app` logger alongside existing styled console output.
+- **Stream separation:** stdout = agent streaming output, stderr = structured app logs + HTTP access logs. Log aggregators (fluentd, Loki, Docker logging drivers) can parse stderr as JSON.
+- **Tests:** `tests/test_structured_log.py` — 10 tests passing (formatter, extras, exceptions, serialization, logger factory, level filtering).
+- **Archon task:** `71e145fa` (feature: improve-md, status: done)
+
 ### 2026-03-03: Docker response-speed, status script, /health, Ollama repetition fix (Cursor)
 - **Docker:** `shm_size: 512mb`, `memswap_limit: 16g` (service level), reservations 10G RAM / 3 CPUs, healthcheck `start_period: 30s`; container recreated.
 - **Health:** No-auth `/health` route in `run_ui.py`; Docker healthcheck and `restart.sh` use `/health` (no 302s from curl).
@@ -75,6 +82,17 @@
 - **Fix 3 — `mcp_handler.py`:** `_determine_server_type()` now checks `transport` key (Claude Desktop config format). Added `_normalize_transport_to_type()` to map `"http"` to `"streamable-http"`. `MCPServerRemote.update()` now accepts `transport` and remaps it to `type`. `_is_streaming_http_type()` now recognizes bare `"http"`.
 - **Fix 4 — `settings.py`:** Increased `mcp_client_init_timeout` default from 10s to 30s.
 - **Verified:** `curl` from inside agent-zero to `http://archon-mcp:8051/mcp` returns HTTP 200 with proper MCP response.
+
+### 2026-03-05: E2E findings addressed + A0 SIP workflow + verify-with-subagents
+- **E2E security/logic/data fixes (Archon tasks → done):** Path traversal (`resolve_under_base()` in files.py; file_info, image_get, file_browser); XSS (messages.js sanitizeMarkdownHtml + path-link escaping, confirmDialog/modals escapeHtml/textContent); message API `get_json() or {}`; api_log_get `_parse_length()` and safe error JSON; orphaned uploads cleaned in `persist_chat.remove_chat()`; login loading state and modal error display.
+- **A0 SIP workflow:** Added `docs/guides/A0_SIP_WORKFLOW.md` (Archon project ID, repo path, task/run/verify flow); linked in `docs/DOCUMENTATION_INDEX.md`. Archon task "Document A0 SIP workflow" marked done.
+- **Verify with subagents:** `.commands/verify-with-subagents.md` (parallel subagents: pytest, ruff, review); `scripts/testing/verify-e2e-fixes.sh` (local parallel pytest + ruff); `.cursor/rules/verify-with-subagents.mdc`; synced to `.cursor/prompts`, `.claude/commands`, `.github/prompts`.
+- **sync-commands.sh:** `SCRIPT_DIR` fixed to repo root (removed `/..`) so `./sync-commands.sh` runs correctly from AgentZ.
+- **e2e-test-report.md:** Updated "Remaining issues" to note fixes applied; open: E2E main UI coverage, verify login fix in E2E.
+- **Verified:** `./scripts/testing/verify-e2e-fixes.sh` — 156 passed, 1 skipped; ruff all passed.
+- **Verify login fix in E2E (Archon task done):** Server started with test auth; agent-browser: (1) empty form submit → no 500, (2) invalid creds → stay on login, (3) valid login requires AUTH_* in .env (usr/.env overrides process env). Screenshot: `e2e-screenshots/verify-login-empty-submit.png`.
+- **E2E main UI coverage (Archon task done):** Set `AUTH_LOGIN=testuser` and `AUTH_PASSWORD=testpass` in `usr/.env` via `python.helpers.dotenv.save_dotenv_value()`; re-ran E2E: login → main UI → Settings modal → Scheduler modal → responsive (375/768/1440). Screenshots: `main-ui-00-after-login.png`, `main-ui-01-settings-modal.png`, `main-ui-02-scheduler-modal.png`, `main-ui-responsive-*.png`. Report updated §5.4, §7.
+- **CI for E2E verification:** Added `.github/workflows/verify-e2e-fixes.yml` — on push/PR to main/master, runs `./scripts/testing/verify-e2e-fixes.sh` (pytest + ruff in parallel). No browser; same checks as /verify-with-subagents. e2e-test-report.md updated with CI note.
 
 ### 2026-03-05: Tool error streak loop detection (#22)
 - **Problem:** GLM-4.7-Flash stuck generating broken Python (e.g. `p_title.font.size Pt(54)` missing `=`), gets SyntaxError, retries endlessly. CPU spiked to 1143%.
