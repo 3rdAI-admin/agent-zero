@@ -2,6 +2,12 @@
 
 ## Completed
 
+### 2026-03-05: Close remaining IMPROVE.md action items (#9, #12, #17)
+- **#9 Health filter:** Verified `_FilteredUvicornServer.startup()` installs filter AFTER uvicorn's `configure_logging()` — confirmed active by code inspection.
+- **#12 Invalid HTTP request:** Added `_InvalidHTTPRequestFilter` on `uvicorn.error` to suppress probe/scanner noise. 3 tests in `test_run_ui_config.py`.
+- **#17 google_workspace MCP:** Code defaults and `.mcp.json` already correct (`workspace_mcp:8889`). Stale user settings was per-container runtime data.
+- **All 21 IMPROVE.md action items now resolved.**
+
 ### 2026-03-05: Structured JSON logging (IMPROVE #5)
 - **New module:** `python/helpers/structured_log.py` — JSON logging to stderr with `{"ts", "level", "logger", "msg", ...extra}` format.
 - **PrintStyle integration:** All static methods (info, warning, error, debug, hint, success) now emit structured JSON via `a0.app` logger alongside existing styled console output.

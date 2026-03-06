@@ -1,4 +1,5 @@
 from datetime import timedelta
+import hmac
 import os
 import secrets
 import ssl
@@ -64,6 +65,23 @@ class _HealthCheckAccessLogFilter(logging.Filter):
         return True
 
 
+class _InvalidHTTPRequestFilter(logging.Filter):
+    """Suppress 'Invalid HTTP request received' warnings from probes/scanners.
+
+    Reason: Docker healthcheck, port scanners, and monitoring tools sometimes send
+    non-HTTP traffic to the uvicorn port. These are expected and harmless but generate
+    WARNING log lines via uvicorn.error (h11_impl.py / httptools_impl.py). Suppressing
+    them reduces log noise without hiding real errors.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.WARNING:
+            msg = record.getMessage()
+            if "Invalid HTTP request received" in msg:
+                return False
+        return True
+
+
 class _FilteredUvicornServer(uvicorn.Server):
     """Uvicorn server that installs health filter and redirects access logs AFTER startup.
 
@@ -85,6 +103,9 @@ class _FilteredUvicornServer(uvicorn.Server):
         for handler in access_logger.handlers:
             if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
                 handler.stream = sys.stderr
+        # Suppress "Invalid HTTP request received" warnings from probes (fixes #12)
+        error_logger = logging.getLogger("uvicorn.error")
+        error_logger.addFilter(_InvalidHTTPRequestFilter())
 
 
 # Set the new timezone to 'UTC'
@@ -243,10 +264,12 @@ def csrf_protect(f):
 async def login_handler():
     error = None
     if request.method == 'POST':
-        user = dotenv.get_dotenv_value("AUTH_LOGIN")
-        password = dotenv.get_dotenv_value("AUTH_PASSWORD")
+        user = dotenv.get_dotenv_value("AUTH_LOGIN") or ""
+        password = dotenv.get_dotenv_value("AUTH_PASSWORD") or ""
+        username = request.form.get("username", "")
+        submitted_password = request.form.get("password", "")
 
-        if request.form['username'] == user and request.form['password'] == password:
+        if user and username == user and hmac.compare_digest(submitted_password, password):
             session['authentication'] = login.get_credentials_hash()
             return redirect(url_for('serve_index'))
         else:
