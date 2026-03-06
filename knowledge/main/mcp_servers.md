@@ -7,7 +7,7 @@ DO NOT create new MCP server entries or ask user to configure. The servers below
 | Server | Type | URL | Tools | Status |
 |--------|------|-----|-------|--------|
 | archon | streamable-http | http://archon-mcp:8051/mcp | 14 tools (task management, Supabase integration) | Active |
-| google_workspace | streamable-http | http://workspace_mcp:8889/mcp | Gmail, Drive, Docs, Sheets, Calendar, Tasks | Active (container) |
+| google_workspace | streamable-http | http://workspace_mcp:8889/mcp | Gmail, Drive, Docs, Sheets, Calendar, Tasks | Active (container, Agent Zero user-specific) |
 | crawl4ai_rag | streamable-http | (configured in user settings) | 5 tools (web crawling, RAG) | Active |
 
 ## Archon Tools
@@ -41,10 +41,10 @@ Google Workspace MCP provides Gmail, Drive, Docs, Sheets, Slides, Calendar, and 
 
 MCP server configuration is stored in:
 
-- **System-wide**: `.mcp.json` (root of project; used by agent-zero)
-- **User-specific**: `/a0/usr/settings.json` (per-user MCP servers)
+- **System-wide**: `.mcp.json` (shared repo defaults; keep broad/shared servers only, e.g. `archon`)
+- **User-specific**: `/a0/usr/settings.json` (per-user MCP servers; use this for single-account `google_workspace`)
 
-Example `.mcp.json` (archon + google_workspace):
+Example `.mcp.json` (shared default):
 ```json
 {
   "mcpServers": {
@@ -53,7 +53,15 @@ Example `.mcp.json` (archon + google_workspace):
       "url": "http://archon-mcp:8051/mcp",
       "init_timeout": 30,
       "tool_timeout": 120
-    },
+    }
+  }
+}
+```
+
+Example Agent Zero user setting (`mcp_servers`) for single-account Google access:
+```json
+{
+  "mcpServers": {
     "google_workspace": {
       "type": "streamable-http",
       "url": "http://workspace_mcp:8889/mcp",
@@ -72,7 +80,7 @@ Example `.mcp.json` (archon + google_workspace):
 
 ## Important
 
-- **NEVER** ask user to add new MCP server entries (they're already configured)
+- **NEVER** add `google_workspace` to shared/default MCP configs in single-account mode; keep it user-specific
 - **NEVER** recreate Archon/crawl4ai tools manually (use MCP tools instead)
 - **NEVER** try to install MCP servers (they run in separate containers)
 - If MCP connection fails, check:

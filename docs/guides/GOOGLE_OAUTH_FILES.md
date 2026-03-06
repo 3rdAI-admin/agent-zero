@@ -148,7 +148,7 @@ graph TD
    /opt/venv-a0/bin/python3 /a0/usr/projects/a0_sip/gmail_oauth.py
    ```
    - Browser opens
-   - Log in as bill@th3rdai.com
+   - Log in as agentz@th3rdai.com
    - Grant permissions
    - `token.json` created automatically
 
@@ -173,7 +173,7 @@ graph TD
 
 ### Current Setup
 
-- **Account**: bill@th3rdai.com
+- **Account**: agentz@th3rdai.com
 - **credentials.json**: `/a0/usr/projects/a0_sip/credentials.json`
 - **token.json**: `/a0/usr/projects/a0_sip/token.json`
 

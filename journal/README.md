@@ -15,3 +15,8 @@
 - 2026-03-04 | validate-project --thorough | Pass (153/153 tests; E:0 W:1; E2E 9/9; post-upgrade: browser-use 0.11.13, litellm 1.79.3)
 - 2026-03-05 | validate-project --thorough | Pass (153/153 tests; E:0 W:0; E2E 9/9; tool error streak fix deployed)
 - 2026-03-05 | validate-project | Pass (153/153; P1–P5; post self-repo/inbox channel)
+- 2026-03-05 | validate-project --thorough | Pass (P1–P4; P5 Skip – stack not started)
+- 2026-03-06 | validate-project --thorough | Pass (P1–P4 163 tests; P5 Skip; fixed structured_log lint/format)
+- 2026-03-06 | validate-project | Pass (P1–P4 214; P5 Skip; ruff/format fixes, usr/.env)
+- 2026-03-06 | validate-project --thorough | Pass (P1–P4 260/260; P5 OK 302; Phase 2: audit_log, host_control; fixed agent.py continue→return)
+- 2026-03-05 | validate-project | Pass (P1–P4 260/260; P5 Skip; Phase 2 complete + LLM timeout fix)

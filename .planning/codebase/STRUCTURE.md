@@ -1,6 +1,7 @@
 # Codebase Structure
 
-**Analysis Date:** 2025-02-20
+**Analysis Date:** 2025-02-20  
+**Quick index:** See [CODEBASE_INDEX.md](./CODEBASE_INDEX.md) for a compact lookup of entry points, API modules, tools, and extension points.
 
 ## Directory Layout
 

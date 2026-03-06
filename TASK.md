@@ -113,7 +113,18 @@
 
 ## In Progress
 
-(none)
+### 2026-03-05: Phase 2 — Container and execution hardening
+- **Archon parent task:** `d30a1155` (doing)
+- **Requirements:** PLATFORM-01, PLATFORM-02, AUTON-04, AUTON-05, AUTON-06, SAFETY-03
+- **Claude tasks (done):** 2a (audit log `a6249485`), 2f (governance dir `c8e40369`), 2b (tool policy `8a70211c`)
+- **Cursor tasks (todo):** 2c (Docker harden `649c498a`), 2d (browser policy `d215547d`), 2e (secrets vault `b47f8a07`)
+- **Claude deliverables:**
+  - `python/helpers/audit_log.py` — append-only JSONL, O_APPEND, ISO timestamps, secrets masking, tool call/result logging
+  - `python/helpers/tool.py` — audit hooks in before/after_execution, PolicyViolation exception
+  - `python/helpers/tool_policy.py` — disable tools, restrict paths, browser domain allowlist from governance config
+  - `python/helpers/files.py` — is_governance_path(), check_governance_write() enforced in all write/delete functions
+  - `agent.py` — PolicyViolation handling returns deny message to agent loop
+  - Tests: 14 (audit) + 12 (governance) + 12 (tool policy) = 38 new tests, 93 total passing
 
 ## Completed: Google Workspace MCP container and docs (2026-03-03)
 

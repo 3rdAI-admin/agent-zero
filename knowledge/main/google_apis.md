@@ -6,7 +6,7 @@ DO NOT recreate, reinstall, or re-authenticate Google API access. Everything bel
 
 - **OAuth Credentials**: `/a0/usr/projects/a0_sip/credentials.json`
 - **OAuth Token**: `/a0/usr/projects/a0_sip/token.json` (auto-refreshes)
-- **Account**: bill@th3rdai.com
+- **Account**: agentz@th3rdai.com
 - **Token includes all required scopes** — no need to re-authorize
 
 ### Authorized OAuth Scopes

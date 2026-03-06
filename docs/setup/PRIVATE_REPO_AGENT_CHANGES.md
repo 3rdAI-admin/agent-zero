@@ -2,6 +2,8 @@
 
 This guide sets up a **separate private Git repository** used for agent-driven code changes and upgrades, with a designated collaborator.
 
+**GitHub token and push settings** (3rdAI_bill = AgentZeroSIP, pushing to ollama and other repos): see [GITHUB_SETTINGS.md](GITHUB_SETTINGS.md).
+
 ## 1. Create the private repository
 
 Create a new **private** repository (do not initialize with a README if you will push this repo into it).
@@ -15,7 +17,7 @@ export GITHUB_TOKEN=ghp_xxx
 ./scripts/setup/create-agent-zero-private-repo.sh
 ```
 
-This creates **3rdAI-admin/agent-zero-private** (private), adds the `self` remote, and adds **3rdAI-bill** (bill@th3rdai.com) as a collaborator with admin access. Override with `GITHUB_OWNER` or `GITHUB_COLLABORATOR_USERNAME` if needed.
+This creates **3rdAI-admin/agent-zero-private** (private), adds the `self` remote, and adds **3rdAI-bill** (agentz@th3rdai.com) as a collaborator with admin access. Override with `GITHUB_OWNER` or `GITHUB_COLLABORATOR_USERNAME` if needed.
 
 ### GitHub (manual)
 
@@ -38,13 +40,13 @@ This creates **3rdAI-admin/agent-zero-private** (private), adds the `self` remot
 
 1. Open the new repo → **Settings** → **Collaborators** (or **Collaborators and teams**).
 2. Click **Add people**.
-3. Add **bill@th3rdai.com**.
+3. Add **agentz@th3rdai.com**.
 4. Choose **Role:** **Admin** (full access: push, pull, settings, add collaborators).
 
 ### GitLab
 
 1. **Project** → **Members** → **Invite members**.
-2. Add **bill@th3rdai.com**, role **Maintainer** or **Owner** for full access.
+2. Add **agentz@th3rdai.com**, role **Maintainer** or **Owner** for full access.
 
 ---
 
@@ -93,7 +95,7 @@ Suggested workflow:
 2. Make commits on that branch.
 3. Push the branch to the private repo:  
    `git push self agent/upgrade-xyz`
-4. **bill@th3rdai.com** (or you) reviews in the private repo and can merge there or merge into this repo via pull request / manual merge.
+4. **agentz@th3rdai.com** (or you) reviews in the private repo and can merge there or merge into this repo via pull request / manual merge.
 
 Optional: restrict the agent to only push to `self` (not to `origin`) via tool config or allowlists so production/main stays under human control.
 

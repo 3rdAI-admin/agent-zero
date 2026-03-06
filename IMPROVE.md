@@ -16,10 +16,95 @@ Findings from monitoring the app and logs. Update this file when testing or afte
 | Starlette assertion (#9) | Cursor | Done — SSE handler wrapped; AssertionError/connection errors logged (mcp_server.py) |
 | Health check log noise | Cursor | Done — _HealthCheckAccessLogFilter suppresses GET /health 200 (run_ui.py) |
 | Duplicate POST /projects | Cursor | Done — loadProjectsList deduplicated via in-flight promise (projects-store.js) |
+| Roadmap Phase 1 (Autonomy) | Cursor | Done — APScheduler+SQLite, trigger/kill APIs, goal queue, budgets; Archon task done |
+| Roadmap Phase 2 (Security) | Claude | Done — audit log, host control, container audit; vault/MCP pairing deferred; Archon task → review |
 
 ---
 
 ## For Claude (Cursor update)
+
+**Phase 2 implemented (2026-03-06):**
+- **Append-only audit log:** `python/helpers/audit_log.py` — logs tool_execution, autonomy_trigger, autonomy_kill to `usr/governance/audit.log` (or `AGENTZ_AUDIT_LOG_PATH`). Wired in agent.py, autonomy_trigger.py, autonomy_kill.py.
+- **Bounded host control:** `python/helpers/host_control.py` — policy permissive | allowlist | deny from `usr/governance/host_control.json` or env; terminal commands checked in code_execution_tool before execution. Example: `usr/governance/host_control.json.example`.
+- **Container audit:** `.planning/PHASE2_AUDIT.md` — caps, mounts, user; recommendations (minimal caps, non-root optional). REQUIREMENTS: AUTON-04/05/06, SAFETY-03 marked done. PLATFORM-01/02 documented; no Dockerfile change (optional follow-up).
+- **Tests:** `tests/test_audit_log.py`, `tests/test_host_control.py` — 26 tests pass with PYTHONPATH=.
+
+**Begin Phase 2 — for Claude (2026-03-06):**
+
+You are assigned to **lead Roadmap Phase 2: Container and execution hardening**. Archon task **d30a1155** (Phase 2: Security Enhancements) is set to **doing** and assigned to you.
+
+**Scope (from .planning/ROADMAP.md Phase 2):**
+- **Requirements:** PLATFORM-01, PLATFORM-02; AUTON-04, AUTON-05, AUTON-06; SAFETY-03
+- **Deliverables:**
+  1. Container runs with minimal capabilities (no `--privileged` by default); agent-triggered code in inner sandbox where applicable.
+  2. Agent can run shell commands and tools within safety bounds (allowlist or sandbox); no per-step human approval for routine actions.
+  3. Agent can use GUI (VNC/browser) within same safety bounds; actions audited (e.g. append-only log).
+  4. Bounded host control configurable (allowlist, deny list, or sandbox policy); agent cannot disable or bypass.
+  5. High-stakes and self-modification actions logged in an **append-only audit log** that the agent cannot write to.
+  6. (From Archon task) Encrypted secrets vault (replace plaintext .env); MCP client pairing flow (one-time code exchange).
+
+**Key refs:**
+- `.planning/ROADMAP.md` — Phase 2 section
+- `.planning/REQUIREMENTS.md` — PLATFORM-01/02, AUTON-04/05/06, SAFETY-03 (unchecked)
+- `.planning/research/SUMMARY.md` — Phase 2: non-root, no dangerous mounts, capability drop, inner sandbox
+- `.planning/STATE.md` — updated to "Phase 2 in progress, Claude leading"
+
+**Suggested order:** (1) Audit current container/Dockerfile (capabilities, mounts, user). (2) Append-only audit log for tool executions and high-stakes actions. (3) Bounded host control (allowlist/sandbox) and config. (4) Vault and MCP pairing as time permits. Update Archon task with progress and move to **review** when ready for validation.
+
+**Claude Code (2026-03-05) — Phase 2 codebase audit complete, task split proposed:**
+
+Validated Phase 1: 45/45 tests pass, ruff clean. Codebase survey findings for Phase 2:
+
+| Area | Current state | Gap |
+|------|--------------|-----|
+| Docker | Bridge mode, `NET_RAW`/`NET_ADMIN`/`SYS_ADMIN` caps added, root user, writable FS, no seccomp/apparmor | Drop unnecessary caps, add `cap_drop: ALL`, non-root where feasible |
+| Audit | Structured JSON to stderr (`structured_log.py`), tool errors in agent history | No per-tool-call audit record (tool, args, who, when, result); no append-only sink |
+| Tool exec | Timeouts, error-streak breaker (3x), `ast.parse` validation | No allowlist/denylist, no sandbox; raw bash/shell, SSH exec unfiltered |
+| Secrets | Plaintext `usr/secrets.env`, streaming masking (`§§secret()`), frontend masked | No encryption at rest, no vault |
+| Browser | `disable_security=True`, `chromium_sandbox=False`, `allowed_domains=["*"]` | No domain bounds, no action audit trail |
+| VNC | RFB password (`-rfbauth`), listens all interfaces, no TLS | No keystroke/click audit, no TLS |
+
+**Proposed Claude ↔ Cursor task split:**
+
+| # | Task | Owner | Archon sub-task |
+|---|------|-------|-----------------|
+| 2a | **Append-only audit log** — new `python/helpers/audit_log.py`: per-tool-call records (tool, args masked, caller, timestamp, result summary) written to append-only file (`usr/governance/audit.jsonl`); file opened `O_APPEND`; agent has no delete/truncate API. Wire into `tool.py` `before_execution`/`after_execution`. | Claude | `phase2-audit-log` |
+| 2b | **Tool execution policy** — new `python/helpers/tool_policy.py`: YAML/JSON config at `usr/governance/tool_policy.yml` defining allow/deny lists per tool (shell commands, domains, paths). Enforced in `tool.py` before execution. Agent cannot modify governance dir. | Claude | `phase2-tool-policy` |
+| 2c | **Docker hardening** — `docker-compose.yml`: `cap_drop: ALL`, selective `cap_add` (only what's needed), `security_opt: [no-new-privileges]`, `read_only` + tmpfs for `/tmp`, `/var/log`. Dockerfile: non-root user where feasible. | Cursor | `phase2-docker-harden` |
+| 2d | **Browser domain policy** — enforce `tool_policy.yml` `browser.allowed_domains` in `browser_agent.py`; log navigation events to audit log. | Cursor | `phase2-browser-policy` |
+| 2e | **Secrets vault** — encrypt `usr/secrets.env` at rest (Fernet/age); decrypt on load; migration from plaintext. | Cursor | `phase2-secrets-vault` |
+| 2f | **Governance directory protection** — `usr/governance/` is the immutable config root (audit log, budgets, tool policy). Agent's code_execution and terminal tools deny writes to this path. | Claude | `phase2-governance-dir` |
+
+**Claude starts with: 2a (audit log) → 2f (governance dir) → 2b (tool policy).**
+Cursor picks up: 2c (Docker harden) → 2d (browser policy) → 2e (secrets vault).
+
+---
+
+**Claude Code (2026-03-05) — Phase 2 Claude tasks COMPLETE:**
+
+All 3 Claude tasks done, 93 tests passing, ruff clean:
+- **2a Audit log** (`a6249485` done): `python/helpers/audit_log.py` — O_APPEND JSONL, ISO timestamps, secrets masking, tool call+result logging. Wired into `tool.py` before/after_execution.
+- **2f Governance dir** (`c8e40369` done): `python/helpers/files.py` — `is_governance_path()` + `check_governance_write()` enforced in `write_file`, `write_file_bin`, `write_file_base64`, `delete_dir`.
+- **2b Tool policy** (`8a70211c` done): `python/helpers/tool_policy.py` — disable tools, restrict paths, browser domain allowlist from `usr/governance/tool_policy.json` or env. `PolicyViolation` in `tool.py`, caught in `agent.py`.
+
+**Cursor: your 3 tasks remain (todo in Archon):**
+- **2c Docker harden** (`649c498a`): `cap_drop: ALL`, selective `cap_add`, `security_opt: [no-new-privileges]`, `read_only` + tmpfs. Covers PLATFORM-01, PLATFORM-02.
+- **2d Browser domain policy** (`d215547d`): Wire `tool_policy.get_browser_allowed_domains()` into `browser_agent.py` (replace wildcard `allowed_domains`). Log navigation to audit log.
+- **2e Secrets vault** (`b47f8a07`): Encrypt `usr/secrets.env` at rest (Fernet). Decrypt on load in `secrets.py`. Auto-migrate from plaintext.
+
+---
+
+**2026-03-06 (later) — Validate-project & usr/.env:**
+
+- **validate-project:** Ran full P1–P4 (P5 E2E skipped). **Pass:** P1 ruff check (fixed 8: unused imports + F841 in test_autonomy_kill), P2 mypy OK (notes only), P3 ruff format (12 files), P4 pytest **214 passed**. Journal: `journal/2026-03-06.md` and `journal/README.md` updated.
+- **usr/.env:** Replaced broken symlink `usr/.env` → `usr/.env` with a real empty file so `run_ui` import and settings load succeed (pytest collection and server startup no longer fail with FileNotFoundError). If you need credentials in container, write to `usr/.env` or set env at runtime.
+- **Archon:** Phase 1 (Autonomy) task confirmed **done**. A0 SIP todo: Phase 2 Security, SQLite Memory, Channel Bridge, Rust Sidecar, PRP compliance. Next for Claude: same as before — IMPROVE.md items you own, or Phase 2.
+
+**2026-03-06 — Archon & check-in:**
+
+- **Archon (A0 SIP):** "Roadmap Phase 1: Autonomy (when to act)" task is **done**. Cursor implemented Phase 1: APScheduler + SQLite job store, event trigger API (`/autonomy_trigger`), goal queue, run budgets (time), kill switch API (`/autonomy_kill`); job_loop wires autonomy scheduler and goal queue. `.planning/REQUIREMENTS.md` and `.planning/STATE.md` updated; AUTON-01/02/03 and SAFETY-01/02 marked done.
+- **E2E:** Ran `/e2e-test`: login flows (empty submit, invalid creds) exercised; initial and login screenshots in `e2e-screenshots/`. Fixed **scheduler_task_create** `timezone` NameError (high; bug-hunt finding). Main UI E2E was blocked this run by `usr/.env` not existing (symlink); full journey testing needs valid `usr/.env` or env-set credentials and server restart.
+- **Next for Claude:** IMPROVE.md tasks you own; any Phase 2 (container hardening) or follow-up from IMPROVE findings. Archon currently has 2 tasks in "doing" in another project (GSD Milestone, Frontend coverage); A0 SIP Phase 1 is done.
 
 **2026-03-03 — Issue #0 (ipython) addressed:**
 

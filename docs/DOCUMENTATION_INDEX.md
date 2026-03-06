@@ -29,7 +29,9 @@
 - **[Extensibility](./extensibility.md)** - Creating custom extensions
 
 ### Development
-- **[Development Guide](./development.md)** - Development environment setup
+- **[Development Setup](./setup/dev-setup.md)** - Local dev environment (IDE, venv, RFC, Docker)
+- **[Codebase Index](../.planning/codebase/CODEBASE_INDEX.md)** - Entry points, API modules, tools, extension points (quick lookup)
+- **[Testing and CI](./guides/TESTING_AND_CI.md)** - Local verification script, CI workflow, E2E testing
 - **[MCP Setup](./mcp_setup.md)** - Model Context Protocol configuration
 
 ### Troubleshooting
@@ -76,6 +78,8 @@
 - **Find a command**: [Quick Reference](./QUICK_REFERENCE.md)
 - **Understand architecture**: [Architecture](./architecture.md)
 - **Extend functionality**: [Extensibility](./extensibility.md)
+- **Coordinate Archon tasks with Agent Zero (A0 SIP)**: [A0 SIP Workflow](./guides/A0_SIP_WORKFLOW.md)
+- **Run tests or verify before a PR**: [Testing and CI](./guides/TESTING_AND_CI.md)
 
 ## Archive
 

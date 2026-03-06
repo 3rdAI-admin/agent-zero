@@ -1,6 +1,6 @@
-# Using a Google Account (e.g. bill@th3rdai.com) with Agent Zero
+# Using a Google Account (e.g. agentz@th3rdai.com) with Agent Zero
 
-You can use a dedicated Google account (e.g. **bill@th3rdai.com**) for:
+You can use a dedicated Google account (e.g. **agentz@th3rdai.com**) for:
 
 1. **Gmail** – Agent Zero can read (and with code/smtp, send) email as that account.
 2. **Google Gemini** – Use that account’s API key for the Google/Gemini model provider.
@@ -18,13 +18,13 @@ You can use a dedicated Google account (e.g. **bill@th3rdai.com**) for:
 
 ---
 
-## 1. Gmail (IMAP) for bill@th3rdai.com
+## 1. Gmail (IMAP) for agentz@th3rdai.com
 
 Agent Zero’s email helpers use **IMAP** with credentials from **Secrets**. Configure the account once, then the agent can use it when you ask (e.g. “Check my Gmail inbox”).
 
 ### 1.1 Create a Gmail App Password
 
-1. Sign in to [Google Account](https://myaccount.google.com/) as **bill@th3rdai.com**.
+1. Sign in to [Google Account](https://myaccount.google.com/) as **agentz@th3rdai.com**.
 2. Turn on **2-Step Verification** (Security → How you sign in to Google).
 3. Create an **App password**:
    - Security → 2-Step Verification → **App passwords**
@@ -38,7 +38,7 @@ Agent Zero’s email helpers use **IMAP** with credentials from **Secrets**. Con
 In the repo root **`.env`** file add (use straight double quotes for the password if it contains spaces):
 
 ```bash
-EMAIL_USER=bill@th3rdai.com
+EMAIL_USER=agentz@th3rdai.com
 EMAIL_PASSWORD=your_16_char_app_password_here
 ```
 
@@ -48,7 +48,7 @@ With Docker Compose, `env_file: .env` injects these into the container; the app 
 
 1. Open Agent Zero → **Settings** → **Secrets**.
 2. Add two entries (one per line, or your UI’s format):
-   - `EMAIL_USER=bill@th3rdai.com`
+   - `EMAIL_USER=agentz@th3rdai.com`
    - `EMAIL_PASSWORD=` + the 16-character App Password
 
 **Option C – secrets file (Docker/volume)**
@@ -60,7 +60,7 @@ If you use the bind mount for `usr` (e.g. `A0_volume` → `/a0/usr`), edit the s
 Add:
 
 ```bash
-EMAIL_USER=bill@th3rdai.com
+EMAIL_USER=agentz@th3rdai.com
 EMAIL_PASSWORD=your_16_char_app_password_here
 ```
 
@@ -71,17 +71,17 @@ Secrets are also documented under [Secrets & Variables](../guides/usage.md#secre
 After saving, you can prompt the agent to use that account, for example:
 
 - *“Check my Gmail inbox for the last 24 hours”*
-- *“Summarize unread emails from bill@th3rdai.com”*
+- *“Summarize unread emails from agentz@th3rdai.com”*
 
 The agent will use the credentials from Secrets when calling the email client.
 
 ---
 
-## 2. Google Gemini (LLM) with bill@th3rdai.com
+## 2. Google Gemini (LLM) with agentz@th3rdai.com
 
 To use **Gemini** with the same Google account:
 
-1. Sign in to [Google AI Studio](https://aistudio.google.com/) as **bill@th3rdai.com**.
+1. Sign in to [Google AI Studio](https://aistudio.google.com/) as **agentz@th3rdai.com**.
 2. Create or copy an **API key** (Get API key / Create API key).
 3. In Agent Zero, set that key in one of these ways:
    - **Settings → API Keys** → **Google** (or “Gemini”) → paste the key, Save.
@@ -96,7 +96,7 @@ Then choose a Google/Gemini model (e.g. `google/gemini-2.0-flash` or the default
 
 | Use case        | Where to configure | What to set |
 |-----------------|--------------------|-------------|
-| Gmail (read)    | **`.env`** (recommended), or Settings → Secrets / `usr/secrets.env` | `EMAIL_USER=bill@th3rdai.com`, `EMAIL_PASSWORD=<App Password>` |
+| Gmail (read)    | **`.env`** (recommended), or Settings → Secrets / `usr/secrets.env` | `EMAIL_USER=agentz@th3rdai.com`, `EMAIL_PASSWORD=<App Password>` |
 | Google Gemini   | **`.env`** or Settings → API Keys | `API_KEY_GOOGLE=<key from Google AI Studio>` |
 
 - Use a **Gmail App Password** for email, not your normal account password.

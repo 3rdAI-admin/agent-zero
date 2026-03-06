@@ -59,3 +59,9 @@ Yes, by creating custom tools or using MCP servers. See [Extensions](../develope
 * **Error Messages:** Pay close attention to the error messages displayed in the Web UI or terminal.  They often provide valuable clues for diagnosing the issue. Refer to the specific error message in online searches or community forums for potential solutions.
 
 * **Performance Issues:** If Agent Zero is slow or unresponsive, it might be due to resource limitations, network latency, or the complexity of your prompts and tasks, especially when using local models.
+
+* **Stuck on "Calling LLM...":** The UI shows this while the backend is waiting for the LLM (e.g. Ollama) to respond. If it never progresses:
+  1. **Pause the agent** (use "Pause Agent" in the chat bar) so the run stops, then start a **new chat** and retry.
+  2. **Check the LLM is reachable:** If using Ollama, ensure it is running and the API base in Settings matches where the container can reach it (e.g. `http://ollama:11434` if Ollama is in the same Docker network, or `http://host.docker.internal:11434` / `http://192.168.50.7:11434` if Ollama is on the host). From the host: `curl -s http://localhost:11434/api/tags` or open the API URL in a browser.
+  3. **Ollama overloaded:** If the model is loading or the GPU is busy, the first token can take a long time. Wait a few minutes or restart Ollama, then retry.
+  4. **Optional:** In **Settings → LiteLLM**, add a timeout (e.g. `request_timeout=120` or `stream_timeout=60`) so long-hanging calls eventually fail with an error instead of hanging indefinitely.
