@@ -8,6 +8,11 @@ set -e
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
+# Keep .env backed up and restore it if it was accidentally removed.
+# shellcheck source=/dev/null
+source "$REPO_ROOT/scripts/lib/ensure_env.sh"
+ensure_env_file "$REPO_ROOT"
+
 if ! [ -f "docker-compose.yml" ]; then
     echo "Error: Run from AgentZ repo root (where docker-compose.yml lives)."
     exit 1

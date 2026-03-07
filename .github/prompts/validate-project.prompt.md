@@ -1,6 +1,5 @@
 ---
-agent: agent
-description: Validate Agent Zero codebase (project-specific)
+description: Comprehensive validation for Agent Zero codebase (project-specific)
 mode: normal
 ---
 
@@ -10,7 +9,7 @@ mode: normal
 
 **Execute ONLY the validation in this file.** Do not run another project's validation.
 
-**Setup (once):** Create and use a virtual environment (e.g. `python -m venv .venv` then `pip install -r requirements.txt -r requirements.dev.txt`). Use the **project venv** for Phase 2 and Phase 4 so deps (e.g. simpleeval) are available—e.g. `.venv/bin/python` (or `venv/bin/python` if your venv is named `venv`). Optional: `pip install ruff` for Phase 1 and 3. For E2E (Phase 5), Docker must be available; use `./startup.sh` or `docker compose up -d` from repo root to start the stack.
+**Setup (once):** Create and use a virtual environment; install runtime and dev deps: `pip install -r requirements.txt -r requirements.dev.txt`. Optional lint/format: `pip install ruff` (then Phase 1 and 3 apply). For E2E (Phase 5), Docker must be available; use `./startup.sh` or `docker compose up -d` from repo root to start the stack.
 
 ## Phase 1: Linting
 
@@ -20,10 +19,9 @@ Run ruff on application and test code (skip if ruff not installed):
 
 ## Phase 2: Type Checking
 
-Optional. Run mypy if installed (warnings acceptable; ensure no critical errors). Use project venv so type stubs match runtime:
+Optional. Run mypy if installed (warnings acceptable; ensure no critical errors):
 
-`.venv/bin/python -m mypy python/ --ignore-missing-imports --no-error-summary 2>/dev/null || true`
-(If your venv is named `venv`, use `venv/bin/python` instead.)
+`mypy python/ --ignore-missing-imports --no-error-summary 2>/dev/null || true`
 
 ## Phase 3: Style Checking
 
@@ -33,10 +31,9 @@ Verify formatting with ruff (skip if ruff not installed):
 
 ## Phase 4: Unit Testing
 
-Run pytest from repo root **using the project venv** so runtime deps (e.g. simpleeval) are available. Exclude tests that require API keys or run LLM calls at import time (email_parser_test needs html2text; install from requirements.txt or requirements.dev.txt for full coverage):
+Run pytest from repo root (use project venv). Exclude tests that require API keys or run LLM calls at import time (email_parser_test needs html2text; install from requirements.txt or requirements.dev.txt for full coverage):
 
-`.venv/bin/python -m pytest tests/ -v --tb=short --ignore=tests/rate_limiter_test.py --ignore=tests/chunk_parser_test.py --ignore=tests/test_fasta2a_client.py --ignore=tests/email_parser_test.py`
-(If your venv is named `venv`, use `venv/bin/python` instead.)
+`python -m pytest tests/ -v --tb=short --ignore=tests/rate_limiter_test.py --ignore=tests/chunk_parser_test.py --ignore=tests/test_fasta2a_client.py --ignore=tests/email_parser_test.py`
 
 ## Phase 5: End-to-End Testing (Docker)
 
@@ -75,6 +72,8 @@ This checks: container health, Web UI, supervisor services (run_ui, xvfb, fluxbo
 ## Summary
 
 Report results for each phase: **Pass**, **Fail**, or **Skipped** (with reason). If all runnable phases pass, state: "All validation passed. Ready for deployment or next steps."
+
+**Note:** Full validation (including mypy and `./scripts/testing/validate.sh`) is run locally when the Docker stack is up. CI (`.github/workflows/verify-e2e-fixes.yml`) runs pytest + ruff only on push/PR.
 
 ## Journal Entry (required after validation)
 

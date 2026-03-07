@@ -8,7 +8,8 @@ services:
     image: agent-zero:local
     container_name: agent-zero
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       # Claude Code config directory - persists OAuth credentials
       - CLAUDE_CONFIG_DIR=/home/claude/.claude
@@ -119,7 +120,8 @@ services:
     image: agent-zero-workspace-mcp:local
     container_name: workspace_mcp
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - WORKSPACE_MCP_PORT=8889
       - MCP_ENABLE_OAUTH21=false
@@ -127,6 +129,8 @@ services:
       - ./workspace-mcp-credentials:/home/mcp/.google_workspace_mcp
     expose:
       - "8889"
+    ports:
+      - "127.0.0.1:8889:8889"  # Host Claude Code only; not exposed to LAN
     networks:
       - default
     restart: unless-stopped

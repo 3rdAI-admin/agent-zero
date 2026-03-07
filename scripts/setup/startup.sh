@@ -11,8 +11,13 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
+
+# Keep .env backed up and restore it if it was accidentally removed.
+# shellcheck source=/dev/null
+source "$REPO_ROOT/scripts/lib/ensure_env.sh"
+ensure_env_file "$REPO_ROOT"
 
 # Docker Compose command
 if docker compose version >/dev/null 2>&1; then

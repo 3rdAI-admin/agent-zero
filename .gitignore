@@ -1,6 +1,7 @@
 # Ignore common unwanted files globally
 **/.DS_Store
 **/.env
+.env.backup
 **/__pycache__/
 *.py[cod]
 **/.conda/
@@ -14,6 +15,7 @@
 
 # Ignore all contents of the virtual environment directory
 .venv/
+.env
 
 # obsolete folders
 memory/

@@ -27,7 +27,8 @@ class _JSONFormatter(logging.Formatter):
         entry: dict = {
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%f"
-            )[:-3] + "Z",
+            )[:-3]
+            + "Z",
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),

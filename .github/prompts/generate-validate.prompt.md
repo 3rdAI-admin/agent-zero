@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: Generate Validate-Project Command
-mode: normal
 ---
 
 # Generate Validate-Project Command

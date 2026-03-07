@@ -1040,7 +1040,23 @@ class TaskScheduler:
                 # This ensures the task context is saved and can be found by polling
                 await self._persist_chat(current_task, context)
 
-                result = await agent.monologue()
+                # SAFETY-01: enforce run budget (time); agent cannot disable
+                from python.helpers.run_budgets import RunBudgets
+
+                budgets = RunBudgets.get()
+                timeout_seconds = budgets.effective_timeout_seconds()
+                if timeout_seconds is not None and timeout_seconds > 0:
+                    try:
+                        result = await asyncio.wait_for(
+                            agent.monologue(), timeout=timeout_seconds
+                        )
+                    except asyncio.TimeoutError:
+                        await self.update_task(task_uuid, state=TaskState.ERROR)
+                        raise RuntimeError(
+                            f"Run budget exceeded: time limit ({timeout_seconds}s)"
+                        ) from None
+                else:
+                    result = await agent.monologue()
 
                 # Success
                 PrintStyle.success(

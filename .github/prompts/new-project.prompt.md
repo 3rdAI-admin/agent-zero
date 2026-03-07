@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: New Project
-mode: normal
 ---
 
 # New Project

@@ -57,6 +57,10 @@ wsproto>=1.2.0
 google-auth>=2.35.0
 google-api-python-client>=2.150.0
 
+# Phase 1 autonomy: persistent cron/interval scheduling (ROADMAP Phase 1)
+apscheduler>=3.10.0,<4
+sqlalchemy>=2.0,<3
+
 # Security: pin transitive deps with known CVEs (Dependabot)
 urllib3>=2.6.3
 filelock>=3.20.3

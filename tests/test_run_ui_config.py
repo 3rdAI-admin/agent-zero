@@ -23,21 +23,27 @@ class TestHealthCheckAccessLogFilter:
     def test_suppresses_health_200(self):
         """Health check GET /health 200 should be filtered out."""
         f = run_ui._HealthCheckAccessLogFilter()
-        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s", (), None)
+        record = logging.LogRecord(
+            "uvicorn.access", logging.INFO, "", 0, "%s", (), None
+        )
         record.args = ("127.0.0.1:1234", "GET", "/health", "HTTP/1.1", 200)
         assert f.filter(record) is False
 
     def test_passes_other_requests(self):
         """Non-health requests should pass through."""
         f = run_ui._HealthCheckAccessLogFilter()
-        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s", (), None)
+        record = logging.LogRecord(
+            "uvicorn.access", logging.INFO, "", 0, "%s", (), None
+        )
         record.args = ("127.0.0.1:1234", "GET", "/api/test", "HTTP/1.1", 200)
         assert f.filter(record) is True
 
     def test_passes_health_non_200(self):
         """Health check with non-200 status should pass through."""
         f = run_ui._HealthCheckAccessLogFilter()
-        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s", (), None)
+        record = logging.LogRecord(
+            "uvicorn.access", logging.INFO, "", 0, "%s", (), None
+        )
         record.args = ("127.0.0.1:1234", "GET", "/health", "HTTP/1.1", 500)
         assert f.filter(record) is True
 
@@ -49,8 +55,13 @@ class TestInvalidHTTPRequestFilter:
         """'Invalid HTTP request received' WARNING should be filtered out."""
         f = run_ui._InvalidHTTPRequestFilter()
         record = logging.LogRecord(
-            "uvicorn.error", logging.WARNING, "", 0,
-            "Invalid HTTP request received.", (), None,
+            "uvicorn.error",
+            logging.WARNING,
+            "",
+            0,
+            "Invalid HTTP request received.",
+            (),
+            None,
         )
         assert f.filter(record) is False
 
@@ -58,8 +69,13 @@ class TestInvalidHTTPRequestFilter:
         """Other WARNING messages should pass through."""
         f = run_ui._InvalidHTTPRequestFilter()
         record = logging.LogRecord(
-            "uvicorn.error", logging.WARNING, "", 0,
-            "Some other warning", (), None,
+            "uvicorn.error",
+            logging.WARNING,
+            "",
+            0,
+            "Some other warning",
+            (),
+            None,
         )
         assert f.filter(record) is True
 
@@ -67,7 +83,12 @@ class TestInvalidHTTPRequestFilter:
         """ERROR level messages mentioning 'Invalid HTTP' should pass (only suppress WARNING)."""
         f = run_ui._InvalidHTTPRequestFilter()
         record = logging.LogRecord(
-            "uvicorn.error", logging.ERROR, "", 0,
-            "Invalid HTTP request received.", (), None,
+            "uvicorn.error",
+            logging.ERROR,
+            "",
+            0,
+            "Invalid HTTP request received.",
+            (),
+            None,
         )
         assert f.filter(record) is True

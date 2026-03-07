@@ -3,7 +3,7 @@
 import json
 import logging
 
-import pytest
+import pytest  # noqa: F401  (capsys fixture)
 
 from python.helpers.structured_log import _JSONFormatter, get_logger
 
@@ -17,8 +17,13 @@ class TestJSONFormatter:
     def test_basic_format_produces_valid_json(self):
         """Expected use: a simple INFO log record produces valid JSON with required fields."""
         record = logging.LogRecord(
-            name="a0.test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello world", args=(), exc_info=None,
+            name="a0.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello world",
+            args=(),
+            exc_info=None,
         )
         output = self.formatter.format(record)
         parsed = json.loads(output)
@@ -30,8 +35,13 @@ class TestJSONFormatter:
     def test_extra_fields_included(self):
         """Expected use: extra dict fields appear in the JSON output."""
         record = logging.LogRecord(
-            name="a0.test", level=logging.WARNING, pathname="", lineno=0,
-            msg="caution", args=(), exc_info=None,
+            name="a0.test",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="caution",
+            args=(),
+            exc_info=None,
         )
         record.source = "app"  # type: ignore[attr-defined]
         record.category = "warning"  # type: ignore[attr-defined]
@@ -46,11 +56,17 @@ class TestJSONFormatter:
             raise ValueError("boom")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(
-            name="a0.test", level=logging.ERROR, pathname="", lineno=0,
-            msg="failed", args=(), exc_info=exc_info,
+            name="a0.test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="failed",
+            args=(),
+            exc_info=exc_info,
         )
         output = self.formatter.format(record)
         parsed = json.loads(output)
@@ -60,8 +76,13 @@ class TestJSONFormatter:
     def test_non_serializable_extra_converted_to_str(self):
         """Edge case: non-JSON-serializable extra values become strings."""
         record = logging.LogRecord(
-            name="a0.test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="a0.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.custom_obj = object()  # type: ignore[attr-defined]
         output = self.formatter.format(record)
@@ -72,8 +93,13 @@ class TestJSONFormatter:
     def test_format_args_interpolation(self):
         """Expected use: %-style args in msg are interpolated."""
         record = logging.LogRecord(
-            name="a0.test", level=logging.INFO, pathname="", lineno=0,
-            msg="count=%d", args=(42,), exc_info=None,
+            name="a0.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="count=%d",
+            args=(42,),
+            exc_info=None,
         )
         output = self.formatter.format(record)
         parsed = json.loads(output)
@@ -104,6 +130,7 @@ class TestGetLogger:
     def test_logger_writes_json_to_stream(self):
         """Expected use: logger output is valid JSON written to handler stream."""
         import io
+
         logger = get_logger("test_stderr_output")
         # Capture by temporarily replacing the handler's stream
         buf = io.StringIO()
@@ -114,7 +141,7 @@ class TestGetLogger:
             logger.warning("test message")
         finally:
             handler.stream = original_stream
-        lines = [l for l in buf.getvalue().strip().split("\n") if l]
+        lines = [line for line in buf.getvalue().strip().split("\n") if line]
         assert len(lines) >= 1
         parsed = json.loads(lines[-1])
         assert parsed["msg"] == "test message"

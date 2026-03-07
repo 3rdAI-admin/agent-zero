@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: Create PRP (Execution Plan with Multi-Agent Task Breakdown)
-mode: normal
 ---
 
 # Create PRP (Execution Plan with Multi-Agent Task Breakdown)

@@ -1,0 +1,32 @@
+# Run E2E-related verification (pytest + ruff) on push and PR.
+# Same checks as ./scripts/testing/verify-e2e-fixes.sh and /verify-with-subagents.
+name: Verify E2E fixes
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create venv and install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements.dev.txt
+          [ -f requirements2.txt ] && pip install -r requirements2.txt || true
+          pip install ruff
+
+      - name: Run verify-e2e-fixes (pytest + ruff)
+        run: ./scripts/testing/verify-e2e-fixes.sh

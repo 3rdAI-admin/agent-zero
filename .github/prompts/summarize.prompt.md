@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: Summarize: Completed Steps and Next Actions
-mode: normal
 ---
 
 # Summarize: Completed Steps and Next Actions

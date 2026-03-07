@@ -12,7 +12,8 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Repo root: directory containing this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANONICAL_DIR="$SCRIPT_DIR/.commands"
 CLAUDE_DIR="$SCRIPT_DIR/.claude/commands"
 CURSOR_DIR="$SCRIPT_DIR/.cursor/prompts"

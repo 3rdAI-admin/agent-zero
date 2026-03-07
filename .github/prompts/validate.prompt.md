@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: Validate (Context Engineering)
-mode: normal
 ---
 
 # Validate (Context Engineering)

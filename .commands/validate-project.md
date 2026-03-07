@@ -1,275 +1,83 @@
 ---
-description: Validate Context Engineering Template (project-specific)
+description: Comprehensive validation for Agent Zero codebase (project-specific)
 ---
 
-# Validate Project (Context Engineering Template)
+# Validate Project (Agent Zero)
 
-> **Generated for this codebase:** Context Engineering Template with 2 use-cases (pydantic-ai, mcp-server), shell scripts (root shims + bin/), pre-commit hooks, GitHub Actions CI, and multi-IDE slash commands. Python: uv + ruff, mypy, pytest. TypeScript: use-cases/mcp-server (tsc, vitest, prettier). Run from repo root.
->
-> **Setup:** Run `uv sync --all-extras` once to install dev tools (ruff, mypy, pytest). For MCP server: `npm install` in use-cases/mcp-server. Optional: `brew install shellcheck` for shell validation.
+> **Generated for this codebase:** Agent Zero – Python agentic framework (python/, agents/, webui), Docker stack, pytest in tests/. Run from repo root. Use **/validate-project** (not /validate) to run this project's validation.
 
-**Execute ONLY the validation in this file.** Do not run another project's validation. Use **`/validate-project`** (not `/validate`) to avoid conflicts with team/global commands.
+**Execute ONLY the validation in this file.** Do not run another project's validation.
 
-## Phase 1: Python Linting
+**Setup (once):** Create and use a virtual environment; install runtime and dev deps: `pip install -r requirements.txt -r requirements.dev.txt`. Optional lint/format: `pip install ruff` (then Phase 1 and 3 apply). For E2E (Phase 5), Docker must be available; use `./startup.sh` or `docker compose up -d` from repo root to start the stack.
 
-Run ruff linter on the Python use-case:
+## Phase 1: Linting
 
-```bash
-uv run ruff check use-cases/pydantic-ai/
-```
+Run ruff on application and test code (skip if ruff not installed):
 
-## Phase 2: Python Type Checking
+`ruff check python/ agents/ tests/ --exclude venv --exclude 'webui/vendor'`
 
-Run mypy type checking (warnings acceptable, ensure no critical errors):
+## Phase 2: Type Checking
 
-```bash
-uv run mypy use-cases/pydantic-ai/ --ignore-missing-imports
-```
+Optional. Run mypy if installed (warnings acceptable; ensure no critical errors):
 
-## Phase 3: Python Style Checking
+`mypy python/ --ignore-missing-imports --no-error-summary 2>/dev/null || true`
 
-Verify Python code formatting with ruff:
+## Phase 3: Style Checking
 
-```bash
-uv run ruff format --check use-cases/pydantic-ai/
-```
+Verify formatting with ruff (skip if ruff not installed):
 
-## Phase 4: Python Unit Testing
+`ruff format --check python/ agents/ tests/ --exclude venv --exclude 'webui/vendor'`
 
-Run pytest on Python use-case tests:
+## Phase 4: Unit Testing
 
-```bash
-uv run pytest use-cases/pydantic-ai/ -v --tb=short
-```
+Run pytest from repo root (use project venv). Exclude tests that require API keys or run LLM calls at import time (email_parser_test needs html2text; install from requirements.txt or requirements.dev.txt for full coverage):
 
-## Phase 5: TypeScript Validation (MCP Server)
+`python -m pytest tests/ -v --tb=short --ignore=tests/rate_limiter_test.py --ignore=tests/chunk_parser_test.py --ignore=tests/test_fasta2a_client.py --ignore=tests/email_parser_test.py`
 
-Run each command separately for the use-cases/mcp-server directory:
+## Phase 5: End-to-End Testing (Docker)
 
-### Type Checking
-```bash
-npm run type-check --prefix use-cases/mcp-server
-```
+User workflow from docs: start stack (or use existing running container) → Web UI reachable → optional full stack validation → cleanup if you started the stack.
 
-### Unit Tests
-```bash
-npm run test:run --prefix use-cases/mcp-server
-```
+### Option A – Start stack and verify Web UI
 
-### Style Checking
-```bash
-npx prettier --check "use-cases/mcp-server/src/**/*.ts" --config use-cases/mcp-server/.prettierrc
-```
+From repo root:
 
-## Phase 6: Shell Script Validation
+`docker compose up -d`
 
-Verify shell scripts have shebangs, are executable, and pass shellcheck:
+Wait for Web UI to respond (default port 8888; 200 or 302 is success):
 
-```bash
-shellcheck setup.sh create-project.sh sync-commands.sh bin/setup.sh bin/setup-vscode.sh bin/setup-claude.sh bin/setup-cursor.sh bin/create-project.sh bin/sync-commands.sh bin/install-claude-commands.sh bin/install-dev-tools.sh
-```
+`timeout 90 bash -c 'until CODE=$(curl -fsS -o /dev/null -w "%{http_code}" "http://localhost:${HOST_PORT:-8888}"); echo "$CODE" | grep -qE "200|302"; do sleep 3; done'`
 
-If shellcheck is not installed, verify syntax only:
+Verify Web UI:
 
-```bash
-bash -n setup.sh
-```
+`curl -fsS -o /dev/null -w "%{http_code}" "http://localhost:${HOST_PORT:-8888}"`
 
-```bash
-bash -n create-project.sh
-```
+Expect 200 or 302. Non-2xx indicates failure.
 
-```bash
-bash -n sync-commands.sh
-```
+### Option B – Full stack validation (container already running)
 
-```bash
-bash -n bin/setup.sh
-```
+If the agent-zero container is already up (e.g. after Option A or `./startup.sh`), run the project validation script:
 
-## Phase 7: Structure & Command Parity
+`./scripts/testing/validate.sh`
 
-Use file tools (Glob, Read, LS) to verify -- do NOT use compound shell commands with `&&` / `||` / `for`.
+This checks: container health, Web UI, supervisor services (run_ui, xvfb, fluxbox, x11vnc), VNC, Claude Code, volume mounts, MCP token, security tools (nmap, nikto), resource limits.
 
-### Core Files
-Verify these exist and are non-empty:
-- CLAUDE.md
-- README.md
-- INITIAL.md
-- INITIAL_EXAMPLE.md
-- LICENSE
-- pyproject.toml
-- .pre-commit-config.yaml
-- .cursorrules
+### Cleanup (only if you started the stack in this run)
 
-### Setup Scripts
-Verify these are executable:
-- setup.sh (root shim)
-- create-project.sh (root shim)
-- sync-commands.sh (root shim)
-- bin/setup.sh
-- bin/setup-vscode.sh
-- bin/setup-claude.sh
-- bin/setup-cursor.sh
-- bin/create-project.sh
-- bin/sync-commands.sh
-- bin/install-claude-commands.sh
-- bin/install-dev-tools.sh
+`docker compose down`
 
-### Use-Cases
-Verify each existing use-case has CLAUDE.md and README.md:
-- use-cases/pydantic-ai/CLAUDE.md
-- use-cases/pydantic-ai/README.md
-- use-cases/mcp-server/CLAUDE.md
-- use-cases/mcp-server/README.md
-
-### Command Parity Across IDEs
-For each command (generate-prd, generate-prp, execute-prp, generate-prompt, validate-project, validate, generate-validate, new-project, build-prp, summarize), verify it exists in at least one IDE:
-- .claude/commands/{cmd}.md
-- .cursor/prompts/{cmd}.md
-- .github/prompts/{cmd}.prompt.md
-
-### PRP Templates
-Verify these exist:
-- PRPs/templates/prp_base.md
-- PRPs/templates/prd_base.md
-
-### Journal Directory
-Verify exists:
-- journal/
-- journal/README.md
-
-## Phase 8: Documentation & Cross-References
-
-### README Commands
-Use Grep to verify README.md mentions all primary commands:
-- generate-prd
-- generate-prp
-- execute-prp
-- generate-prompt
-- validate-project
-- generate-validate
-- new-project
-- build-prp
-- summarize
-
-### Skill Files
-Verify skill files exist for Claude Code slash-menu discovery:
-- .claude/skills/generate-prp/SKILL.md
-- .claude/skills/execute-prp/SKILL.md
-- .claude/skills/build-prp/SKILL.md
-- .claude/skills/generate-prompt/SKILL.md
-- .claude/skills/generate-validate/SKILL.md
-- .claude/skills/new-project/SKILL.md
-- .claude/skills/validate/SKILL.md
-
-### VS Code Prompt Frontmatter
-Verify .github/prompts/*.prompt.md files have YAML frontmatter (lines starting with `---` and containing `mode:`).
-
-## Phase 9: E2E Workflow Validation
-
-Test complete user workflows from documentation, not just internal checks.
-
-### Workflow 1: Project Creation (Dry Run)
-Create a temporary project from the template and verify its structure:
-
-```bash
-TMPDIR=$(mktemp -d)
-bash create-project.sh "$TMPDIR/test-project" --all 2>&1 || true
-```
-
-After running, verify the created project has:
-- CLAUDE.md or .cursorrules (at least one AI config file)
-- INITIAL.md
-- journal/ directory
-
-Then clean up:
-
-```bash
-rm -rf "$TMPDIR"
-```
-
-### Workflow 2: Command Sync Verification
-Verify sync-commands.sh runs without errors:
-
-```bash
-bash -n sync-commands.sh
-```
-
-Then use Grep to confirm at least 3 commands exist in each IDE folder:
-- .claude/commands/ should contain .md files
-- .cursor/prompts/ should contain .md files
-- .github/prompts/ should contain .prompt.md files
-
-### Workflow 3: Pre-commit Configuration
-Verify pre-commit configuration is valid YAML and references expected hooks:
-
-```bash
-python3 -c "import yaml; yaml.safe_load(open('.pre-commit-config.yaml'))" 2>&1 || echo "WARN: PyYAML not available, skipping YAML parse check"
-```
-
-Use Grep to verify .pre-commit-config.yaml references these hooks:
-- ruff
-- shellcheck
-- markdownlint
-- prettier
-
-### Workflow 4: JSON/YAML File Integrity
-Validate JSON files (skip JSONC files like tsconfig.json and settings.json):
-
-```bash
-python3 -c "import json; json.load(open('use-cases/mcp-server/package.json'))"
-```
-
-Validate YAML files:
-
-```bash
-python3 -c "import yaml; yaml.safe_load(open('.github/workflows/validate.yml'))" 2>&1 || echo "WARN: PyYAML not available"
-```
-
-```bash
-python3 -c "import yaml; yaml.safe_load(open('.pre-commit-config.yaml'))" 2>&1 || echo "WARN: PyYAML not available"
-```
-
-### Workflow 5: Example Project Structure
-Verify the examples/daily-quote-app/ tutorial project has essential files:
-- examples/daily-quote-app/README.md
-- examples/daily-quote-app/INITIAL.md
-
-### Workflow 6: GitHub Actions CI
-Verify .github/workflows/validate.yml exists and references expected jobs:
-- Use Grep to check for job names: structure, typescript, python, shell, files, documentation
+(Omitting `-v` preserves memory, knowledge, logs, and tmp per README.)
 
 ## Summary
 
-Report results for each phase:
-- **P1 (Python Lint):** OK/FAIL
-- **P2 (Python Types):** OK/WARN/FAIL
-- **P3 (Python Style):** OK/FAIL
-- **P4 (Python Tests):** OK/FAIL
-- **P5 (TypeScript):** OK/FAIL (skip if node_modules not installed)
-- **P6 (Shell):** OK/WARN/FAIL
-- **P7 (Structure):** OK/FAIL
-- **P8 (Docs):** OK/FAIL
-- **P9 (E2E):** OK/FAIL
+Report results for each phase: **Pass**, **Fail**, or **Skipped** (with reason). If all runnable phases pass, state: "All validation passed. Ready for deployment or next steps."
 
-Count total errors (E) and warnings (W). Pass = 0 errors. Warn = 0 errors but warnings present.
+**Note:** Full validation (including mypy and `./scripts/testing/validate.sh`) is run locally when the Docker stack is up. CI (`.github/workflows/verify-e2e-fixes.yml`) runs pytest + ruff only on push/PR.
 
-## Journal Entry (Required)
+## Journal Entry (required after validation)
 
-After validation completes:
-
-1. **Ensure journal/ exists:** `mkdir -p journal`
-2. **Append one line to `journal/YYYY-MM-DD.md`** (today's date, ISO format):
-   ```
-   HH:MM | Pass/Fail | E:N W:M | P1:OK P2:OK ... P9:OK | optional note
-   ```
-3. **Update `journal/README.md`** with one line per date for that day's latest outcome, e.g.:
-   ```
-   YYYY-MM-DD: N runs, last Pass (E:0 W:1)
-   ```
-
-**Example entry:**
-```
-15:30 | Pass | E:0 W:2 | P1:OK P2:WARN P3:OK P4:OK P5:OK P6:OK P7:OK P8:OK P9:OK | Clean validation
-```
+1. Ensure `journal/` exists: `mkdir -p journal`
+2. Append one line to `journal/$(date +%Y-%m-%d).md`:  
+   `HH:MM | Pass/Fail | E:N W:M | P1:... P2:... P3:... P4:... P5:... | optional note`  
+   Use 24-hour time, E = errors, W = warnings, P1–P5 = phase outcomes (OK / Skip / Fail).
+3. Update `journal/README.md` with one line per date for that day's latest outcome (e.g. `YYYY-MM-DD | validate-project | Pass` or `Fail`).

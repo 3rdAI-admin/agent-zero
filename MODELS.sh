@@ -52,11 +52,13 @@ if [[ -z "$PRESET" ]]; then
   echo "  ollama-glm   Chat/Browser -> GLM-4.7-Flash (30B MoE, 73.8% SWE-bench), Utility -> gpt-oss:20b"
   echo "  ollama-qwen3 Chat/Browser -> Qwen3-Coder:30b (30B MoE, agentic-trained), Utility -> gpt-oss:20b"
   echo "  ollama-mixed  Chat -> GLM-4.7-Flash, Browser -> devstral-small-2 (384K, vision), Utility -> gpt-oss:20b"
-  echo "  ollama-claude Chat/Browser -> Qwen3-14B Claude Opus 4.5 distill (9GB), Utility -> gpt-oss:20b"
+  echo "  ollama-baz   Chat/Utility/Browser -> Qwen3-14B Claude Opus 4.5 distill (all roles, 9GB)"
   echo "  ollama-glm-claude Chat/Browser -> GLM-4.7-Flash (fast MoE), Utility -> Qwen3-14B Claude distill"
   echo ""
   echo "All Ollama presets include anti-repetition kwargs (repeat_penalty 1.3, max_tokens 4096,"
-  echo "temperature 0.4 chat / 0.2 browser+util) via LiteLLM OpenAI-compat param mapping."
+  echo "temperature 0.4 chat / 0.2 browser+util) and num_ctx context window limits:"
+  echo "  <= 3B params: num_ctx=4096 | 4-8B: 8192 | 9-30B: 16384 | >30B: 8192"
+  echo "This prevents Ollama from allocating oversized KV caches that stall inference."
   echo ""
   echo "Optional: --test-llm  Run a short LLM call to verify the model responds."
   echo ""
@@ -68,7 +70,7 @@ PRESET_LOWER="$(echo "$PRESET" | tr '[:upper:]' '[:lower:]')"
 # Normalize for Python script (preset keys use underscores)
 PRESET_LOWER="${PRESET_LOWER//-/_}"
 case "$PRESET_LOWER" in
-  anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_claude|ollama_glm_claude) ;;
+  anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_baz|ollama_glm_claude) ;;
   *)
     echo "Error: unknown preset '$PRESET'. Run without arguments to see available presets."
     exit 2

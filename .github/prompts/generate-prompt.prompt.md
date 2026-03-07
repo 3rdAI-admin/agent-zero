@@ -1,7 +1,6 @@
 ---
 agent: agent
 description: Generate Prompt
-mode: normal
 ---
 
 # Generate Prompt

@@ -5,6 +5,7 @@ import shutil
 import time
 from python.helpers.tool import Tool, Response
 from python.helpers import files, rfc_exchange, projects, runtime, settings
+from python.helpers.host_control import is_terminal_command_allowed
 from python.helpers.print_style import PrintStyle
 from python.helpers.shell_local import LocalInteractiveSession
 from python.helpers.shell_ssh import SSHInteractiveSession
@@ -80,8 +81,15 @@ class CodeExecution(Tool):
                 code=self.args["code"], session=session, reset=reset
             )
         elif runtime == "terminal":
+            command = self.args.get("code") or ""
+            allowed, reason = is_terminal_command_allowed(command)
+            if not allowed:
+                return Response(
+                    message=f"[Host control] {reason}",
+                    break_loop=False,
+                )
             response = await self.execute_terminal_command(
-                command=self.args["code"], session=session, reset=reset
+                command=command, session=session, reset=reset
             )
         elif runtime == "output":
             response = await self.get_terminal_output(
