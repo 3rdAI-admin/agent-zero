@@ -43,7 +43,7 @@ fi
 REPO_NAME="${GITHUB_REPO_NAME:-google-workspace-mcp}"
 OWNER="${GITHUB_OWNER:-3rdAI-admin}"
 COLLAB_USERNAME="${GITHUB_COLLABORATOR_USERNAME:-3rdAI-bill}"
-# Use bill@th3rdai.com (3rdAI-bill) credentials when creating under that user
+# Use agentz@th3rdai.com (3rdAI-bill) credentials when creating under that user
 USE_BILL="${GITHUB_USE_BILL_CREDENTIALS:-}"
 [ "$OWNER" = "3rdAI-bill" ] && USE_BILL=1
 if [ -n "$USE_BILL" ] && [ -n "${GITHUB_TOKEN_SELF:-}" ]; then

@@ -22,7 +22,7 @@ OLLAMA_PRESETS = [
     "ollama_glm",
     "ollama_qwen3",
     "ollama_mixed",
-    "ollama_claude",
+    "ollama_baz",
     "ollama_glm_claude",
 ]
 

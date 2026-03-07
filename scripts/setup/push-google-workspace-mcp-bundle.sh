@@ -22,7 +22,7 @@ for envfile in .env usr/.env; do
 done
 
 REPO_URL="${GITHUB_REPO_URL:?Set GITHUB_REPO_URL e.g. https://github.com/3rdAI-bill/google-workspace-mcp.git}"
-# Use bill@th3rdai.com (3rdAI-bill) credentials when pushing to that account
+# Use agentz@th3rdai.com (3rdAI-bill) credentials when pushing to that account
 # Prefer GITHUB_TOKEN_3rdAI_bill (underscore; set in .env), then GITHUB_TOKEN_SELF
 if [ -n "$GITHUB_USE_BILL_CREDENTIALS" ] || echo "$REPO_URL" | grep -q '3rdAI-bill'; then
   TOKEN="${GITHUB_TOKEN_3rdAI_bill:-${GITHUB_TOKEN_SELF:-$GITHUB_TOKEN}}"

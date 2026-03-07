@@ -9,7 +9,7 @@
 # Optional:
 #   GITHUB_OWNER=3rdAI-admin     # default
 #   GITHUB_REPO_NAME=agent-zero-private
-#   GITHUB_COLLABORATOR_USERNAME=3rdAI-bill   # default; GitHub login for bill@th3rdai.com
+#   GITHUB_COLLABORATOR_USERNAME=3rdAI-bill   # default; GitHub login for agentz@th3rdai.com
 #
 # See: docs/setup/PRIVATE_REPO_AGENT_CHANGES.md
 
@@ -94,7 +94,7 @@ if [ -n "$COLLAB_USERNAME" ]; then
   if [ "$COLLAB_CODE" -eq 204 ] || [ "$COLLAB_CODE" -eq 201 ]; then
     echo "Collaborator $COLLAB_USERNAME added with admin access."
   else
-    echo "Note: Could not add collaborator (HTTP $COLLAB_CODE). Add bill@th3rdai.com manually: repo → Settings → Collaborators."
+    echo "Note: Could not add collaborator (HTTP $COLLAB_CODE). Add agentz@th3rdai.com manually: repo → Settings → Collaborators."
   fi
 else
   echo ""
