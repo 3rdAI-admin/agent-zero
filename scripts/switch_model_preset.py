@@ -51,6 +51,34 @@ _CTX_LARGE = 16384   # 9-30B params (qwen3-14b, gpt-oss:20b, devstral, glm-4.7-f
 
 # Presets: provider, model name, api_base (empty = use provider default from model_providers.yaml)
 PRESETS = {
+    "google": {
+        "chat_model_provider": "google",
+        "chat_model_name": "gemini-2.5-flash",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 1000000,
+        "util_model_provider": "google",
+        "util_model_name": "gemini-2.5-flash",
+        "util_model_api_base": "",
+        "util_model_ctx_length": 1000000,
+        "util_model_kwargs": {"temperature": 0.2},
+        "browser_model_provider": "google",
+        "browser_model_name": "gemini-2.5-flash",
+        "browser_model_api_base": "",
+    },
+    "google_pro": {
+        "chat_model_provider": "google",
+        "chat_model_name": "gemini-2.5-pro",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 1000000,
+        "util_model_provider": "google",
+        "util_model_name": "gemini-2.5-flash",
+        "util_model_api_base": "",
+        "util_model_ctx_length": 1000000,
+        "util_model_kwargs": {"temperature": 0.2},
+        "browser_model_provider": "google",
+        "browser_model_name": "gemini-2.5-flash",
+        "browser_model_api_base": "",
+    },
     "anthropic": {
         "chat_model_provider": "anthropic",
         "chat_model_name": "claude-sonnet-4-6",

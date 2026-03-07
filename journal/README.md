@@ -19,4 +19,5 @@
 - 2026-03-06 | validate-project --thorough | Pass (P1–P4 163 tests; P5 Skip; fixed structured_log lint/format)
 - 2026-03-06 | validate-project | Pass (P1–P4 214; P5 Skip; ruff/format fixes, usr/.env)
 - 2026-03-06 | validate-project --thorough | Pass (P1–P4 260/260; P5 OK 302; Phase 2: audit_log, host_control; fixed agent.py continue→return)
+- 2026-03-06 | validate-project --thorough | Pass (P1–P4 260/260; P5 OK; W:1 MCP token not configured)
 - 2026-03-05 | validate-project | Pass (P1–P4 260/260; P5 Skip; Phase 2 complete + LLM timeout fix)

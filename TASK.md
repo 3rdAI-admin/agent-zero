@@ -2,6 +2,20 @@
 
 ## Completed
 
+### 2026-03-07: Fix Archon MCP settings
+- **Archon task:** `bb15f4ba` (review)
+- **Problem:** Agent Zero user MCP settings still used `npx mcp-remote` against the LAN IP for `archon` and kept the global MCP init timeout at `10s`, causing Archon initialization to time out while the other MCP servers still loaded.
+- **Fix:** Updated MCP settings to use direct `streamable-http` to `http://archon-mcp:8051/mcp`, restored `mcp_client_init_timeout` to `30`, synced the repo seed file `usr/settings.json`, updated the live container settings, and restarted Agent Zero. Verified in logs: `archon`, `google_workspace`, and `crawl4ai_rag` all updated their tool lists successfully.
+
+### 2026-03-07: Update email references to agentz
+- **Archon task:** `70a8b386` (review)
+- **Fix:** Updated active local email configuration in `.env` to `agentz@th3rdai.com` so future default email/Gmail flows use the renamed account.
+
+### 2026-03-07: Stop duplicate-response LLM retry loop
+- **Archon task:** `3b52f871` (review)
+- **Problem:** Agent Zero could get stuck on "Calling LLM again" because loop guards emitted warnings for duplicate responses, stream repetition, and iteration exhaustion without terminating the current run.
+- **Fix:** Updated `agent.py` so those guardrails return the warning immediately and stop the monologue. Added `tests/test_agent_loop_guards.py` covering duplicate-response and max-iteration exit behavior.
+
 ### 2026-03-05: Close remaining IMPROVE.md action items (#9, #12, #17)
 - **#9 Health filter:** Verified `_FilteredUvicornServer.startup()` installs filter AFTER uvicorn's `configure_logging()` — confirmed active by code inspection.
 - **#12 Invalid HTTP request:** Added `_InvalidHTTPRequestFilter` on `uvicorn.error` to suppress probe/scanner noise. 3 tests in `test_run_ui_config.py`.

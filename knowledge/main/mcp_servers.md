@@ -72,6 +72,32 @@ Example Agent Zero user setting (`mcp_servers`) for single-account Google access
 }
 ```
 
+Example Agent Zero user setting when all three local MCP servers are enabled:
+```json
+{
+  "mcpServers": {
+    "archon": {
+      "description": "Archon MCP over Docker network",
+      "transport": "streamable-http",
+      "url": "http://archon-mcp:8051/mcp",
+      "init_timeout": 30,
+      "tool_timeout": 120
+    },
+    "crawl4ai-rag": {
+      "transport": "sse",
+      "url": "http://192.168.50.7:8054/sse"
+    },
+    "google_workspace": {
+      "description": "Gmail, Drive, Docs, Sheets, Calendar, Tasks (container)",
+      "type": "streamable-http",
+      "url": "http://workspace_mcp:8889/mcp",
+      "init_timeout": 30,
+      "tool_timeout": 120
+    }
+  }
+}
+```
+
 ## Network Requirements
 
 - **archon-mcp**: Requires agent-zero container to join `archon_app-network` (configured in docker-compose.yml)
@@ -94,6 +120,7 @@ Example Agent Zero user setting (`mcp_servers`) for single-account Google access
 - Check init_timeout (default 30s) and tool_timeout (default 120s) in .mcp.json
 - Verify MCP server container is running and healthy
 - Check Docker network connectivity
+- For Agent Zero in Docker, use direct `http://archon-mcp:8051/mcp` for Archon instead of a host-side `mcp-remote` wrapper when possible
 
 **"ExceptionGroup: unhandled errors in a TaskGroup"**
 - Verify URL scheme matches server type (http for streamable-http)

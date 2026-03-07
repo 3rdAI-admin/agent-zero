@@ -420,7 +420,7 @@ class Agent:
                         self.hist_add_warning(message=warning_msg)
                         PrintStyle(font_color="orange", padding=True).print(warning_msg)
                         self.context.log.log(type="warning", content=warning_msg)
-                        break
+                        return warning_msg
 
                     # call message_loop_start extensions
                     await self.call_extensions(
@@ -510,6 +510,7 @@ class Agent:
                                 warning_msg
                             )
                             self.context.log.log(type="warning", content=warning_msg)
+                            return warning_msg
                         elif (
                             self.loop_data.last_response == agent_response
                         ):  # if assistant_response is the same as last message in history, let him know
@@ -522,6 +523,7 @@ class Agent:
                                 warning_msg
                             )
                             self.context.log.log(type="warning", content=warning_msg)
+                            return warning_msg
 
                         else:  # otherwise proceed with tool
                             # Append the assistant's response to the history
