@@ -38,6 +38,7 @@ CONTAINER_NAME="agent-zero"
 HOST_PORT="${HOST_PORT:-8888}"
 STOP_TIMEOUT=30
 HEALTH_WAIT_MAX=90
+READY_WAIT_MAX=90
 GITHUB_TIMEOUT=8
 
 info()  { echo -e "${CYAN}[INFO]${NC} $1"; }
@@ -187,6 +188,30 @@ if [ $WAITED -ge $HEALTH_WAIT_MAX ]; then
     warn "Check: docker logs $CONTAINER_NAME"
 fi
 
-# ─── 4. Status (container, health, settings, access) ─────────────────────
+# ─── 4. Readiness check ───────────────────────────────────────────────────
+info "Waiting for readiness (max ${READY_WAIT_MAX}s)..."
+WAITED=0
+while [ $WAITED -lt $READY_WAIT_MAX ]; do
+    if ! is_running; then
+        fail "Container exited unexpectedly during readiness wait."
+        docker logs --tail 30 "$CONTAINER_NAME" 2>/dev/null || true
+        exit 1
+    fi
+    READY_CODE=$(docker exec "$CONTAINER_NAME" curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:80/ready 2>/dev/null || echo "000")
+    if [ "$READY_CODE" = "200" ]; then
+        ok "Application is ready."
+        break
+    fi
+    echo -n "."
+    sleep 3
+    WAITED=$((WAITED + 3))
+done
+echo ""
+
+# ─── 5. Status (container, health, settings, access) ─────────────────────
+if [ $WAITED -ge $READY_WAIT_MAX ]; then
+    warn "Readiness check did not pass within ${READY_WAIT_MAX}s. Service is live but not fully ready."
+fi
+
 export CONTAINER_NAME HOST_PORT
 "$REPO_ROOT/scripts/show_status.sh" || exit 1

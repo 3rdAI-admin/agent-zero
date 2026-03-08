@@ -2,6 +2,18 @@
 
 ## Completed
 
+### 2026-03-08: A0 runtime state discovery and legacy path cleanup
+- **Archon task:** `70728303-bac5-41f0-8bfd-751be9f4824e` (review)
+- **Fix:** Documented the effective runtime state model in `docs/developer/RUNTIME_STATE.md`, switched `preload.py` to resolve effective runtime settings instead of defaults-only state, delayed the `run_ui.py` runtime settings snapshot until after migration, and rewrote active MCP setup/validation scripts to derive the token from the live runtime instead of scraping legacy `tmp/settings.json`.
+
+### 2026-03-08: Create Archon tasks for remaining `IMPROVE2.md` items
+- **Archon tasks:** `2f89d6c9-baee-4277-b55a-2a8fd7d94e70`, `6a86c4d3-254d-4d6f-874e-bca78edcb7c5`, `2c8143e7-0703-42c7-8a06-2708ac952284`, `3b3b013d-12cf-49b5-ae82-78fb9a7e8ad8`, `af59349f-10c8-4e35-9160-3fe373bb1992`
+- **Fix:** Created Archon tasks for the remaining local-only fallback handoff items and reconciled `IMPROVE2.md` so every tracked improvement now has a matching Archon task or an explicitly documented partial mapping.
+
+### 2026-03-08: Reconcile `IMPROVE2.md` with Archon backlog
+- **Archon task:** n/a (local coordination update)
+- **Fix:** Reconciled the fallback handoff log against the current A0 SIP Archon backlog, filled in synced task IDs and assignees, and marked which handoff items are fully synced, partially covered, or still local-only.
+
 ### 2026-03-08: Add manual chat rename action
 - **Archon task:** `c60f7daa-8e4c-4bcf-a4df-2a4d2cb8d43a` (review)
 - **Fix:** Added a manual rename action in the chat sidebar so any chat can be renamed directly from its row. The change adds a new `/chat_rename` API that persists the updated context name, triggers state refresh across tabs, and includes backend validation tests for success, truncation, and blank-name rejection.
@@ -227,5 +239,6 @@ See **IMPROVE.md** → "Action items (suggested improvements)" for full list. Su
 
 ## Discovered During Work
 
+- The live container’s reliable app interpreter is `/opt/venv-a0/bin/python`; bare `python3` in `docker exec` does not have the full app dependency set
 - `docs/archive/` contains 37 historical docs that are referenced nowhere in active docs — could be pruned
 - `docs/troubleshooting/` has 14 files, many are single-fix notes — could be consolidated

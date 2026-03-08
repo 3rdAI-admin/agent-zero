@@ -20,10 +20,10 @@ echo "Agent Zero MCP connectivity test"
 echo "=========================================="
 echo ""
 
-# Resolve token from container
+# Resolve token from container runtime
 TOKEN=""
 if docker ps --format '{{.Names}}' | grep -qx agent-zero; then
-  TOKEN=$(docker exec agent-zero bash -c "cat /a0/tmp/settings.json 2>/dev/null | grep -o '\"mcp_server_token\": \"[^\"]*\"' | cut -d'\"' -f4" 2>/dev/null || true)
+  TOKEN="$(docker exec agent-zero bash -lc "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'" 2>/dev/null || true)"
 fi
 
 if [ -z "$TOKEN" ]; then

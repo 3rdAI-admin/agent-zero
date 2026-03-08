@@ -118,7 +118,7 @@ echo ""
 
 # Phase 7: MCP Configuration
 echo -e "${BLUE}[Phase 7] MCP Server${NC}"
-TOKEN=$(docker exec agent-zero cat /a0/tmp/settings.json 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin).get("mcp_server_token", ""))' 2>/dev/null || echo "")
+TOKEN="$(docker exec agent-zero bash -lc "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'" 2>/dev/null || true)"
 if [ -n "$TOKEN" ] && [ "$TOKEN" != "" ]; then
     echo -e "${GREEN}✅ MCP token configured${NC}"
     ((PASSED++))

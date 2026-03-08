@@ -28,7 +28,7 @@ echo "Restarting agent-zero..."
 "${COMPOSE[@]}" restart agent-zero
 
 echo ""
-echo "Waiting for Web UI to respond (up to 90s)..."
+echo "Waiting for Web UI liveness (up to 90s)..."
 PORT="${HOST_PORT:-8888}"
 MAX_WAIT=90
 ELAPSED=0
@@ -42,6 +42,21 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 done
 if [ $ELAPSED -ge $MAX_WAIT ]; then
     echo "Timeout waiting for UI. Check: docker compose ps"
+fi
+
+echo ""
+echo "Waiting for application readiness (up to 90s)..."
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    if curl -fsS -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/ready" 2>/dev/null | grep -q '^200$'; then
+        echo "Application ready after ${ELAPSED}s."
+        break
+    fi
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+done
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+    echo "Timeout waiting for readiness. Service is live but may still be initializing."
 fi
 
 echo ""

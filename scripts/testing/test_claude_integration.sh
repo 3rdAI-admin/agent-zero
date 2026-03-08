@@ -64,7 +64,7 @@ echo ""
 
 # Test 5: MCP Token (if available)
 echo -e "${YELLOW}[Test 5] Checking MCP token configuration...${NC}"
-TOKEN=$(docker exec agent-zero bash -c "cat /a0/tmp/settings.json 2>/dev/null | grep -o '\"mcp_server_token\": \"[^\"]*\"' | cut -d'\"' -f4" || echo "")
+TOKEN="$(docker exec agent-zero bash -lc "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'" 2>/dev/null || true)"
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "" ]; then
     echo -e "${YELLOW}⚠️  MCP token not set (will be generated on first login)${NC}"
     echo "   To get your MCP token:"

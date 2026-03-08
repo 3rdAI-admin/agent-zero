@@ -32,6 +32,7 @@ from python.helpers import (
     mcp_server,
     fasta2a_server,
     settings as settings_helper,
+    startup_state as startup_state_helper,
 )
 from python.helpers.files import get_abs_path
 from python.helpers import runtime, dotenv, process
@@ -183,11 +184,8 @@ socketio_server = socketio.AsyncServer(
 )
 
 websocket_manager = WebSocketManager(socketio_server, lock)
-_settings = settings_helper.get_settings()
-settings_helper.set_runtime_settings_snapshot(_settings)
-websocket_manager.set_server_restart_broadcast(
-    _settings.get("websocket_server_restart_enabled", True)
-)
+_settings: settings_helper.Settings | None = None
+startup_state = startup_state_helper.StartupState()
 
 # Set up basic authentication for UI and API but not MCP
 # basic_auth = BasicAuth(webapp)
@@ -330,6 +328,13 @@ async def logout_handler():
 @webapp.route("/health", methods=["GET"])
 def health():
     return Response("ok", status=200, mimetype="text/plain")
+
+
+@webapp.route("/ready", methods=["GET"])
+def ready():
+    is_ready, phases = startup_state.ready()
+    status_code = 200 if is_ready else 503
+    return {"ready": is_ready, "phases": phases}, status_code
 
 
 # handle default address, load index
@@ -538,10 +543,18 @@ def configure_websocket_namespaces(
 
 
 def run():
+    global _settings
     PrintStyle().print("Initializing framework...")
 
     # migrate data before anything else
     initialize.initialize_migration()
+
+    # Snapshot effective runtime settings only after migration/runtime init.
+    _settings = settings_helper.get_settings()
+    settings_helper.set_runtime_settings_snapshot(_settings)
+    websocket_manager.set_server_restart_broadcast(
+        _settings.get("websocket_server_restart_enabled", True)
+    )
 
     # # Suppress only request logs but keep the startup messages
     # from werkzeug.serving import WSGIRequestHandler
@@ -655,7 +668,7 @@ def run():
         host=host,
         port=port,
         log_level="info",
-        access_log=_settings.get("uvicorn_access_logs_enabled", False),
+        access_log=(_settings or {}).get("uvicorn_access_logs_enabled", False),
         ws="wsproto",
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
@@ -702,22 +715,86 @@ def wait_for_health(host: str, port: int, scheme: str = "http"):
         time.sleep(1)
 
 
+def _watch_task(
+    name: str,
+    task,
+    *,
+    required: bool,
+    success_detail: str,
+    failure_detail: str,
+) -> None:
+    def _wait_for_result() -> None:
+        startup_state.mark_running(name, required=required)
+        try:
+            task.result_sync()
+            startup_state.mark_ready(name, detail=success_detail)
+        except Exception as e:
+            startup_state.mark_failed(name, error=str(e), detail=failure_detail)
+
+    threading.Thread(target=_wait_for_result, daemon=True).start()
+
+
+def _mcp_is_required() -> bool:
+    configured = (_settings or {}).get("mcp_servers", "")
+    if not configured:
+        return False
+    if isinstance(configured, str):
+        stripped = configured.strip()
+        return stripped not in ("", "{}", '{"mcpServers": {}}')
+    return bool(configured)
+
+
 def init_a0():
+    startup_state.reset()
+    startup_state.mark_running(
+        "migration", required=True, detail="Applying migrations and reloading settings."
+    )
+    startup_state.mark_ready("migration", detail="Migrations completed.")
+
     # initialize contexts and MCP
     init_chats = initialize.initialize_chats()
+    startup_state.mark_running(
+        "chat_restore", required=True, detail="Loading saved chats."
+    )
+    _watch_task(
+        "chat_restore",
+        init_chats,
+        required=True,
+        success_detail="Saved chats restored.",
+        failure_detail="Chat restore failed.",
+    )
     # wait for chat load with timeout so a slow/corrupt tmp/chats does not block forever
     try:
         init_chats.result_sync(timeout=60)
     except TimeoutError:
+        startup_state.update_detail(
+            "chat_restore",
+            detail="Still restoring chats after 60s; startup continues in degraded mode.",
+        )
         PrintStyle().print(
             "Warning: loading saved chats timed out after 60s; continuing without them."
         )
 
-    initialize.initialize_mcp()
+    init_mcp = initialize.initialize_mcp()
+    _watch_task(
+        "mcp_init",
+        init_mcp,
+        required=_mcp_is_required(),
+        success_detail="MCP initialization completed.",
+        failure_detail="MCP initialization failed.",
+    )
     # start job loop
     initialize.initialize_job_loop()
+    startup_state.mark_ready("job_loop", detail="Job loop started.")
     # preload
-    initialize.initialize_preload()
+    init_preload = initialize.initialize_preload()
+    _watch_task(
+        "preload",
+        init_preload,
+        required=False,
+        success_detail="Preload completed.",
+        failure_detail="Preload failed.",
+    )
 
 
 # run the internal server
