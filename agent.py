@@ -330,6 +330,17 @@ class UserMessage:
 
 
 class LoopData:
+    """Per-turn state for the agent message loop.
+
+    Retry budget summary (all layers are bounded):
+    - LiteLLM API call: 2 retries, 1.5s delay (models.py, transient errors only)
+    - Critical exception: 1 retry, 3s delay (agent.py retry_critical_exception)
+    - Message loop: MAX_ITERATIONS cap (default 20)
+    - Tool error streak: TOOL_ERROR_STREAK_MAX consecutive failures of same tool (default 3)
+    - Subordinate agent: DEFAULT_SUBORDINATE_TIMEOUT (default 600s, call_subordinate.py)
+    - Scheduled tasks: RunBudgets.effective_timeout_seconds (task_scheduler.py)
+    """
+
     # Max message-loop iterations per user turn; prevents unbounded monologue loops
     MAX_ITERATIONS = 20
 

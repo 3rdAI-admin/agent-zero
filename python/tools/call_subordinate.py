@@ -1,9 +1,16 @@
+import asyncio
+
 from agent import Agent, UserMessage
 from python.helpers.tool import Tool, Response
 from initialize import initialize_agent
 from python.extensions.hist_add_tool_result import (
     _90_save_tool_call_file as save_tool_call_file,
 )
+
+# Max time (seconds) a subordinate monologue may run before the parent
+# reclaims control.  Prevents a stuck sub-agent from blocking the parent
+# indefinitely.  Override via settings key "subordinate_timeout".
+DEFAULT_SUBORDINATE_TIMEOUT = 600  # 10 minutes
 
 
 class Delegation(Tool):
@@ -31,8 +38,22 @@ class Delegation(Tool):
         subordinate: Agent = self.agent.get_data(Agent.DATA_NAME_SUBORDINATE)  # type: ignore
         subordinate.hist_add_user_message(UserMessage(message=message, attachments=[]))
 
-        # run subordinate monologue
-        result = await subordinate.monologue()
+        # run subordinate monologue with a bounded timeout
+        from python.helpers import settings as _settings
+
+        _set = _settings.get_settings()
+        timeout = float(
+            _set.get("subordinate_timeout", DEFAULT_SUBORDINATE_TIMEOUT)
+        )
+        try:
+            result = await asyncio.wait_for(
+                subordinate.monologue(), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            result = (
+                f"Subordinate agent timed out after {int(timeout)}s. "
+                "Partial work may have been completed."
+            )
 
         # seal the subordinate's current topic so messages move to `topics` for compression
         subordinate.history.new_topic()
