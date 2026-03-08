@@ -82,8 +82,8 @@ ALLOWED_ORIGINS=*://localhost:*,*://127.0.0.1:*,*://0.0.0.0:*,*://192.168.50.7:*
 
 ## See Also
 
-- `RESPONSES.md` - Claude ↔ Cursor handoff (decisions, implemented, remediations)
-- `A0_OLLAMA.md` - Ollama presets, GLM :32k, MODELS.sh --status
+- `docs/status/RESPONSES.md` - Claude ↔ Cursor handoff (decisions, implemented, remediations)
+- `conf/models/A0_OLLAMA.md` - Ollama presets, GLM :32k, MODELS.sh --status
 - `MIGRATION_GUIDE.md` - Full migration guide
 - `scripts/README.md` - Scripts directory guide
 - `docs/README.md` - Documentation guide

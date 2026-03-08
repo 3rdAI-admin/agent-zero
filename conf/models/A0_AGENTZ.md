@@ -117,4 +117,4 @@ chat:
 - **401 / invalid key**  
   Regenerate the key on the dashboard and update Settings or `.env`. Restart after changing `.env`.
 
-More detail: see **A0_VENICEAI.md** (Venice vs Agent Zero API, dashboard sections, troubleshooting).
+More detail: see **conf/models/A0_VENICEAI.md** (Venice vs Agent Zero API, dashboard sections, troubleshooting).
