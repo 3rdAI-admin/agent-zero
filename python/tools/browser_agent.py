@@ -1,6 +1,9 @@
 import asyncio
+import os
 import time
 from typing import Optional, cast
+from urllib.parse import urlparse
+
 from agent import Agent, InterventionException
 from pathlib import Path
 
@@ -10,9 +13,98 @@ from python.helpers.browser_use import browser_use  # type: ignore[attr-defined]
 from python.helpers.print_style import PrintStyle
 from python.helpers.playwright import ensure_playwright_binary
 from python.helpers.secrets import get_secrets_manager
+from python.helpers import audit_log
+from python.helpers.tool_policy import get_browser_allowed_domains, is_domain_allowed
 from python.extensions.message_loop_start._10_iteration_no import get_iter_no
 from pydantic import BaseModel
 from python.helpers.dirty_json import DirtyJson
+
+# Environment variable escape hatch: set BROWSER_ALLOW_ALL=true to bypass
+# domain filtering entirely (useful for development/testing).
+_ENV_ALLOW_ALL = "BROWSER_ALLOW_ALL"
+
+# Default permissive allowlist used when no tool_policy.json is configured.
+# Covers common research, documentation, and development domains.
+DEFAULT_BROWSER_DOMAINS = [
+    "*.google.com",
+    "*.googleapis.com",
+    "*.github.com",
+    "*.githubusercontent.com",
+    "*.stackoverflow.com",
+    "*.stackexchange.com",
+    "*.wikipedia.org",
+    "*.wikimedia.org",
+    "*.python.org",
+    "*.readthedocs.io",
+    "*.readthedocs.org",
+    "*.docs.rs",
+    "*.npmjs.com",
+    "*.pypi.org",
+    "*.mozilla.org",
+    "*.w3.org",
+    "*.anthropic.com",
+    "*.openai.com",
+    "*.huggingface.co",
+    "*.arxiv.org",
+    "*.medium.com",
+    "*.dev.to",
+    "*.reddit.com",
+    "localhost",
+    "127.0.0.1",
+]
+
+
+def _resolve_allowed_domains() -> list[str]:
+    """Resolve the effective browser domain allowlist.
+
+    Priority:
+    1. BROWSER_ALLOW_ALL=true env var → wildcard (unrestricted)
+    2. tool_policy.json browser.allowed_domains → configured list
+    3. DEFAULT_BROWSER_DOMAINS → permissive defaults
+
+    Returns:
+        list: Domain patterns for browser_use BrowserProfile.
+    """
+    # Escape hatch: allow everything
+    if os.environ.get(_ENV_ALLOW_ALL, "").strip().lower() == "true":
+        return ["*"]
+
+    # Policy file takes precedence
+    policy_domains = get_browser_allowed_domains()
+    if policy_domains:
+        return policy_domains
+
+    # Fall back to built-in defaults
+    return list(DEFAULT_BROWSER_DOMAINS)
+
+
+def _log_navigation(
+    url: str,
+    domain: str,
+    allowed: bool,
+    context_id: str = "",
+    agent_name: str = "",
+) -> None:
+    """Log a browser navigation event to the audit log.
+
+    Args:
+        url: The URL being navigated to.
+        domain: Extracted hostname.
+        allowed: Whether the navigation was permitted.
+        context_id: Agent context identifier.
+        agent_name: Name of the calling agent.
+    """
+    audit_log.write(
+        "browser_navigation",
+        tool_name="browser_agent",
+        agent_name=agent_name,
+        context_id=context_id,
+        details={
+            "url": url[:500],
+            "domain": domain,
+            "allowed": allowed,
+        },
+    )
 
 
 class State:
@@ -56,7 +148,7 @@ class State:
                 chromium_sandbox=False,
                 accept_downloads=True,
                 downloads_path=files.get_abs_path("usr/downloads"),
-                allowed_domains=["*", "http://*", "https://*"],
+                allowed_domains=_resolve_allowed_domains(),
                 executable_path=pw_binary,
                 keep_alive=True,
                 minimum_wait_page_load_time=1.0,
@@ -179,17 +271,41 @@ class State:
             ) from e
 
         self.iter_no = get_iter_no(self.agent)
+        self._logged_urls: set[str] = set()
 
         async def hook(agent: browser_use.Agent):
             await self.agent.wait_if_paused()
             if self.iter_no != get_iter_no(self.agent):
                 raise InterventionException("Task cancelled")
 
+        async def step_end_hook(agent: browser_use.Agent):
+            """Log new navigation URLs after each browser step."""
+            await hook(agent)  # re-use pause/cancel checks
+            try:
+                urls = agent.history.urls() if agent.history else []
+                for url in urls:
+                    if url and url not in self._logged_urls:
+                        self._logged_urls.add(url)
+                        try:
+                            domain = urlparse(url).hostname or ""
+                        except Exception:
+                            domain = ""
+                        allowed, _ = is_domain_allowed(url)
+                        _log_navigation(
+                            url=url,
+                            domain=domain,
+                            allowed=allowed,
+                            context_id=self.agent.context.id,
+                            agent_name=self.agent.agent_name,
+                        )
+            except Exception:
+                pass  # Don't break the browser step for logging failures
+
         # try:
         result = None
         if self.use_agent:
             result = await self.use_agent.run(
-                max_steps=50, on_step_start=hook, on_step_end=hook
+                max_steps=50, on_step_start=hook, on_step_end=step_end_hook
             )
         return result
 

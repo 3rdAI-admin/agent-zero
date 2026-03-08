@@ -1,0 +1,25 @@
+{
+    "disabled_tools": [],
+    "restricted_paths": ["/etc/shadow", "/root/.ssh"],
+    "browser": {
+        "allowed_domains": [
+            "*.google.com",
+            "*.googleapis.com",
+            "*.github.com",
+            "*.githubusercontent.com",
+            "*.stackoverflow.com",
+            "*.stackexchange.com",
+            "*.wikipedia.org",
+            "*.python.org",
+            "*.readthedocs.io",
+            "*.npmjs.com",
+            "*.pypi.org",
+            "*.anthropic.com",
+            "*.openai.com",
+            "*.huggingface.co",
+            "*.arxiv.org",
+            "localhost",
+            "127.0.0.1"
+        ]
+    }
+}

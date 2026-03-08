@@ -66,20 +66,24 @@ class TestResponseToolCompat:
     @pytest.mark.asyncio
     async def test_text_takes_priority(self):
         """When multiple keys present, text should win."""
-        tool = _make_response_tool({
-            "text": "from text",
-            "message": "from message",
-            "content": "from content",
-        })
+        tool = _make_response_tool(
+            {
+                "text": "from text",
+                "message": "from message",
+                "content": "from content",
+            }
+        )
         resp = await tool.execute()
         assert resp.message == "from text"
 
     @pytest.mark.asyncio
     async def test_message_fallback_over_content(self):
         """message should be preferred over content when text is absent."""
-        tool = _make_response_tool({
-            "message": "from message",
-            "content": "from content",
-        })
+        tool = _make_response_tool(
+            {
+                "message": "from message",
+                "content": "from content",
+            }
+        )
         resp = await tool.execute()
         assert resp.message == "from message"

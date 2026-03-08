@@ -42,13 +42,9 @@ class Delegation(Tool):
         from python.helpers import settings as _settings
 
         _set = _settings.get_settings()
-        timeout = float(
-            _set.get("subordinate_timeout", DEFAULT_SUBORDINATE_TIMEOUT)
-        )
+        timeout = float(_set.get("subordinate_timeout", DEFAULT_SUBORDINATE_TIMEOUT))
         try:
-            result = await asyncio.wait_for(
-                subordinate.monologue(), timeout=timeout
-            )
+            result = await asyncio.wait_for(subordinate.monologue(), timeout=timeout)
         except asyncio.TimeoutError:
             result = (
                 f"Subordinate agent timed out after {int(timeout)}s. "

@@ -955,7 +955,9 @@ class MCPClientBase(ABC):
     # No self.session, self.exit_stack, self.stdio, self.write as persistent instance fields
 
     def __init__(self, server: Union[MCPServerLocal, MCPServerRemote]):
-        self._lock = threading.Lock()  # per-instance lock (was ClassVar, serialized unrelated servers)
+        self._lock = (
+            threading.Lock()
+        )  # per-instance lock (was ClassVar, serialized unrelated servers)
         self.server = server
         self.tools: List[dict[str, Any]] = []  # Tools are cached on the client instance
         self.error: str = ""

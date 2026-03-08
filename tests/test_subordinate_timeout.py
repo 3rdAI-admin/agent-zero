@@ -9,7 +9,7 @@ Covers:
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -54,9 +54,7 @@ class TestSubordinateTimeout:
         # Simulate the timeout logic directly
         timeout = DEFAULT_SUBORDINATE_TIMEOUT
         try:
-            result = await asyncio.wait_for(
-                mock_sub.monologue(), timeout=timeout
-            )
+            result = await asyncio.wait_for(mock_sub.monologue(), timeout=timeout)
         except asyncio.TimeoutError:
             result = f"Subordinate agent timed out after {int(timeout)}s."
 
@@ -75,9 +73,7 @@ class TestSubordinateTimeout:
 
         timeout = 0.1  # Very short for testing
         try:
-            result = await asyncio.wait_for(
-                mock_sub.monologue(), timeout=timeout
-            )
+            result = await asyncio.wait_for(mock_sub.monologue(), timeout=timeout)
         except asyncio.TimeoutError:
             result = (
                 f"Subordinate agent timed out after {int(timeout)}s. "

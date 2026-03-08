@@ -10,7 +10,7 @@ Covers:
 import sys
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -79,7 +79,7 @@ class TestHTTPClientPoolLimits:
 
         with patch.object(httpx.AsyncClient, "__init__", capturing_init):
             factory = CustomHTTPClientFactory(verify=False)
-            client = factory()
+            factory()
 
         assert "limits" in captured
         assert captured["limits"].max_connections == 40
@@ -134,7 +134,9 @@ class TestServerStatusState:
                 state = "error"
             else:
                 state = "initializing"
-            result.append({"name": server.name, "state": state, "tool_count": tool_count})
+            result.append(
+                {"name": server.name, "state": state, "tool_count": tool_count}
+            )
 
         assert result[0]["state"] == "ready"
         assert result[1]["state"] == "degraded"
