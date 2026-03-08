@@ -1,6 +1,7 @@
 #!/bin/bash
 # Agent Zero startup: check GitHub updates → check running instance → graceful shutdown → start → health check → status.
 # Run from repo root (where docker-compose.yml and .env live).
+# Extra mode: ./startup.sh --logs [docker compose logs args]
 
 set -e
 
@@ -11,7 +12,14 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$SCRIPT_DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # Keep .env backed up and restore it if it was accidentally removed.
@@ -40,6 +48,19 @@ fail()  { echo -e "${RED}[FAIL]${NC} $1"; }
 is_running() {
     docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
 }
+
+show_logs() {
+    local extra_args=("$@")
+    if [ ${#extra_args[@]} -eq 0 ]; then
+        extra_args=(-f --tail "${LOG_TAIL_LINES:-200}")
+    fi
+    exec "${DOCKER_COMPOSE_CMD[@]}" logs "${extra_args[@]}" "$CONTAINER_NAME"
+}
+
+if [ "${1:-}" = "--logs" ]; then
+    shift
+    show_logs "$@"
+fi
 
 # ─── 0. Check GitHub for updates (best-effort, non-fatal) ───────────────────
 check_github_updates() {

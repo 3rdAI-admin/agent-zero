@@ -2,6 +2,10 @@
 
 ## Completed
 
+### 2026-03-08: Add `startup.sh --logs` mode
+- **Archon task:** `3d246ab2-0b9e-4c60-894a-ee16e74d517d` (done)
+- **Fix:** Added a dedicated `--logs` option to the `./startup.sh` entrypoint (symlinked to `scripts/setup/startup.sh`) so it can jump straight into `docker compose logs` for `agent-zero` without running the normal startup sequence. Also fixed repo-root resolution so both paths work correctly. By default it follows logs with `--tail 200`, and it forwards any extra log arguments you pass after `--logs`.
+
 ### 2026-03-07: Fix Archon MCP settings
 - **Archon task:** `bb15f4ba` (review)
 - **Problem:** Agent Zero user MCP settings still used `npx mcp-remote` against the LAN IP for `archon` and kept the global MCP init timeout at `10s`, causing Archon initialization to time out while the other MCP servers still loaded.
@@ -125,6 +129,14 @@
 - **Dependency upgrades:** browser-use 0.5.11→0.11.13, litellm 1.63.2→1.79.3, pypdf secure 6.7.5
 - **Status:** 17 of 21 action items complete. Remaining: #5 (structured logging), #9 (health filter verify), #12 (invalid HTTP suppress), #17 (google_workspace MCP entry)
 
+### 2026-03-08: MCP tool whitelist + Gmail integration fix
+- **Problem:** Agent Zero (qwen3-coder:30b) couldn't use Gmail MCP tools — picked wrong tool (`search_custom` instead of `search_gmail_messages`) because 114 Google Workspace tools (170KB prompt) overwhelmed the model.
+- **Fix 1 — `mcp_handler.py`:** Added `allowed_tools` whitelist field to `MCPServerRemote` and `MCPServerLocal`. When set, `get_tools()` and `has_tool()` only expose whitelisted tools. Empty list = all tools (backward compatible).
+- **Fix 2 — `settings.json`:** Whitelisted 25 essential tools (Gmail, Drive, Docs, Calendar, Sheets, Tasks) for google_workspace server. Reduced MCP prompt from 170KB to 67KB.
+- **Fix 3 — `unknown.py`:** Unknown tool handler now includes MCP tools in its error response, so the model sees available MCP tools when it picks a wrong tool name.
+- **Fix 4 — `knowledge/main/agent_identity.md`:** New knowledge file documenting Agent Zero's identity, connected accounts (Gmail, Drive, GitHub, Figma), and exact MCP tool names with usage examples.
+- **Result:** Agent Zero successfully searches Gmail (`search_gmail_messages`), reads email content (`get_gmail_messages_content_batch`), and self-corrects argument errors on first retry.
+
 ## In Progress
 
 ### 2026-03-05: Phase 2 — Container and execution hardening
@@ -202,7 +214,7 @@ See **IMPROVE.md** → "Action items (suggested improvements)" for full list. Su
 - [x] **#14** — Venv recovery: docs/troubleshooting/venv_recovery.md (2026-03-04)
 - [x] **#15** — Fluxbox config: docker/run/fs/root/.fluxbox/init (2026-03-03)
 - [x] **#16** — Google OAuth docs: GOOGLE_OAUTH_FILES.md (2026-03-04)
-- [ ] **#17** — google_workspace MCP: fix/remove entry
+- [x] **#17** — google_workspace MCP: allowed_tools whitelist (2026-03-08)
 - [x] **#18** — MCP import: streamable_http_client (2026-03-03)
 - [x] **#19** — Autocutsel timing: startsecs=3 (2026-03-04)
 - [x] **#20** — Health filter bypass: _FilteredUvicornServer (2026-03-03)

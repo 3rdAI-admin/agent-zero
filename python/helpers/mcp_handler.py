@@ -274,6 +274,10 @@ class MCPServerRemote(BaseModel):
     tool_timeout: int = Field(default=0)
     verify: bool = Field(default=True, description="Verify SSL certificates")
     disabled: bool = Field(default=False)
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description="Whitelist of tool names to expose. Empty list means all tools.",
+    )
 
     __lock: ClassVar[threading.Lock] = PrivateAttr(default=threading.Lock())
     __client: Optional["MCPClientRemote"] = PrivateAttr(default=None)
@@ -291,15 +295,26 @@ class MCPServerRemote(BaseModel):
         with self.__lock:
             return self.__client.get_log()  # type: ignore
 
+    def _is_tool_allowed(self, tool_name: str) -> bool:
+        """Check if a tool passes the allowed_tools filter."""
+        if not self.allowed_tools:
+            return True
+        return tool_name in self.allowed_tools
+
     def get_tools(self) -> List[dict[str, Any]]:
-        """Get all tools from the server"""
+        """Get tools from the server, filtered by allowed_tools if set."""
         with self.__lock:
-            return self.__client.tools  # type: ignore
+            all_tools = self.__client.tools  # type: ignore
+            if not self.allowed_tools:
+                return all_tools
+            return [t for t in all_tools if t["name"] in self.allowed_tools]
 
     def has_tool(self, tool_name: str) -> bool:
-        """Check if a tool is available"""
+        """Check if a tool is available and allowed."""
         with self.__lock:
-            return self.__client.has_tool(tool_name)  # type: ignore
+            if not self.__client.has_tool(tool_name):  # type: ignore
+                return False
+            return self._is_tool_allowed(tool_name)
 
     async def call_tool(
         self, tool_name: str, input_data: Dict[str, Any]
@@ -324,6 +339,7 @@ class MCPServerRemote(BaseModel):
                     "tool_timeout",
                     "disabled",
                     "verify",
+                    "allowed_tools",
                 ]:
                     if key == "name":
                         value = normalize_name(value)
@@ -359,6 +375,10 @@ class MCPServerLocal(BaseModel):
     tool_timeout: int = Field(default=0)
     verify: bool = Field(default=True, description="Verify SSL certificates")
     disabled: bool = Field(default=False)
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description="Whitelist of tool names to expose. Empty list means all tools.",
+    )
 
     __lock: ClassVar[threading.Lock] = PrivateAttr(default=threading.Lock())
     __client: Optional["MCPClientLocal"] = PrivateAttr(default=None)
@@ -376,15 +396,26 @@ class MCPServerLocal(BaseModel):
         with self.__lock:
             return self.__client.get_log()  # type: ignore
 
+    def _is_tool_allowed(self, tool_name: str) -> bool:
+        """Check if a tool passes the allowed_tools filter."""
+        if not self.allowed_tools:
+            return True
+        return tool_name in self.allowed_tools
+
     def get_tools(self) -> List[dict[str, Any]]:
-        """Get all tools from the server"""
+        """Get tools from the server, filtered by allowed_tools if set."""
         with self.__lock:
-            return self.__client.tools  # type: ignore
+            all_tools = self.__client.tools  # type: ignore
+            if not self.allowed_tools:
+                return all_tools
+            return [t for t in all_tools if t["name"] in self.allowed_tools]
 
     def has_tool(self, tool_name: str) -> bool:
-        """Check if a tool is available"""
+        """Check if a tool is available and allowed."""
         with self.__lock:
-            return self.__client.has_tool(tool_name)  # type: ignore
+            if not self.__client.has_tool(tool_name):  # type: ignore
+                return False
+            return self._is_tool_allowed(tool_name)
 
     async def call_tool(
         self, tool_name: str, input_data: Dict[str, Any]
@@ -409,6 +440,7 @@ class MCPServerLocal(BaseModel):
                     "init_timeout",
                     "tool_timeout",
                     "disabled",
+                    "allowed_tools",
                 ]:
                     if key == "name":
                         value = normalize_name(value)
