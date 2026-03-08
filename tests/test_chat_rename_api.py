@@ -14,7 +14,9 @@ def test_chat_rename_updates_context_and_marks_dirty(monkeypatch):
     saved_contexts = []
     dirty_reasons = []
 
-    monkeypatch.setattr(handler, "use_context", lambda ctxid, create_if_not_exists=False: context)
+    monkeypatch.setattr(
+        handler, "use_context", lambda ctxid, create_if_not_exists=False: context
+    )
     monkeypatch.setattr(
         "python.api.chat_rename.persist_chat.save_tmp_chat",
         lambda ctx: saved_contexts.append(ctx),
@@ -40,9 +42,15 @@ def test_chat_rename_truncates_overlong_names(monkeypatch):
     handler = RenameChat(app, threading.RLock())
     context = SimpleNamespace(id="ctx-1", name="Old name")
 
-    monkeypatch.setattr(handler, "use_context", lambda ctxid, create_if_not_exists=False: context)
-    monkeypatch.setattr("python.api.chat_rename.persist_chat.save_tmp_chat", lambda ctx: None)
-    monkeypatch.setattr("python.helpers.state_monitor_integration.mark_dirty_all", lambda reason: None)
+    monkeypatch.setattr(
+        handler, "use_context", lambda ctxid, create_if_not_exists=False: context
+    )
+    monkeypatch.setattr(
+        "python.api.chat_rename.persist_chat.save_tmp_chat", lambda ctx: None
+    )
+    monkeypatch.setattr(
+        "python.helpers.state_monitor_integration.mark_dirty_all", lambda reason: None
+    )
 
     result = asyncio.run(
         handler.process(
