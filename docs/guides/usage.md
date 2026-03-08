@@ -20,6 +20,15 @@ The Restart button allows you to quickly restart the Agent Zero container withou
 > - Reset the framework if you encounter unexpected behavior
 > - See changes applied to the framework code
 
+### Chat Management
+The chat list in the sidebar includes quick actions for managing saved conversations:
+
+* **Rename Chat:** Click the pencil icon on a chat row to give that chat a custom name
+  - Helpful for keeping long-running conversations organized
+  - Updated names are saved with the chat and appear across tabs after state refresh
+* **Close Chat:** Click the close icon on a chat row to remove that chat
+  - A confirmation step helps prevent accidental deletion
+
 ### Action Buttons
 Located beneath the chat input box, Agent Zero provides a set of action buttons for enhanced control and visibility:
 

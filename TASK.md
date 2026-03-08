@@ -2,6 +2,10 @@
 
 ## Completed
 
+### 2026-03-08: Add manual chat rename action
+- **Archon task:** `c60f7daa-8e4c-4bcf-a4df-2a4d2cb8d43a` (review)
+- **Fix:** Added a manual rename action in the chat sidebar so any chat can be renamed directly from its row. The change adds a new `/chat_rename` API that persists the updated context name, triggers state refresh across tabs, and includes backend validation tests for success, truncation, and blank-name rejection.
+
 ### 2026-03-08: Add `startup.sh --logs` mode
 - **Archon task:** `3d246ab2-0b9e-4c60-894a-ee16e74d517d` (done)
 - **Fix:** Added a dedicated `--logs` option to the `./startup.sh` entrypoint (symlinked to `scripts/setup/startup.sh`) so it can jump straight into `docker compose logs` for `agent-zero` without running the normal startup sequence. Also fixed repo-root resolution so both paths work correctly. By default it follows logs with `--tail 200`, and it forwards any extra log arguments you pass after `--logs`.
