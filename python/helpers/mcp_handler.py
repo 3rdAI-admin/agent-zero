@@ -319,10 +319,16 @@ class MCPServerRemote(BaseModel):
     async def call_tool(
         self, tool_name: str, input_data: Dict[str, Any]
     ) -> CallToolResult:
-        """Call a tool with the given input data"""
+        """Call a tool with the given input data.
+
+        Lock is NOT held during the async call so concurrent tool
+        executions on the same server are not serialized.
+        """
+        # Grab a reference to the client under the lock, then release
+        # before the (potentially long) async call.
         with self.__lock:
-            # We already run in an event loop, dont believe Pylance
-            return await self.__client.call_tool(tool_name, input_data)  # type: ignore
+            client = self.__client
+        return await client.call_tool(tool_name, input_data)  # type: ignore
 
     def update(self, config: dict[str, Any]) -> "MCPServerRemote":
         with self.__lock:
@@ -420,10 +426,14 @@ class MCPServerLocal(BaseModel):
     async def call_tool(
         self, tool_name: str, input_data: Dict[str, Any]
     ) -> CallToolResult:
-        """Call a tool with the given input data"""
+        """Call a tool with the given input data.
+
+        Lock is NOT held during the async call so concurrent tool
+        executions on the same server are not serialized.
+        """
         with self.__lock:
-            # We already run in an event loop, dont believe Pylance
-            return await self.__client.call_tool(tool_name, input_data)  # type: ignore
+            client = self.__client
+        return await client.call_tool(tool_name, input_data)  # type: ignore
 
     def update(self, config: dict[str, Any]) -> "MCPServerLocal":
         with self.__lock:
@@ -737,18 +747,26 @@ class MCPConfig(BaseModel):
                 name = server.name
                 # get tool count
                 tool_count = len(server.get_tools())
-                # check if server is connected
-                connected = True  # tool_count > 0
                 # get error message if any
                 error = server.get_error()
                 # get log bool
                 has_log = server.get_log() != ""
+                # Derive state: ready if tools loaded, degraded if error but still in servers list
+                if tool_count > 0 and not error:
+                    state = "ready"
+                elif tool_count > 0 and error:
+                    state = "degraded"
+                elif error:
+                    state = "error"
+                else:
+                    state = "initializing"
 
                 # add server status to result
                 result.append(
                     {
                         "name": name,
-                        "connected": connected,
+                        "connected": tool_count > 0,
+                        "state": state,
                         "error": error,
                         "tool_count": tool_count,
                         "has_log": has_log,
@@ -908,15 +926,24 @@ class MCPConfig(BaseModel):
     async def call_tool(
         self, tool_name: str, input_data: Dict[str, Any]
     ) -> CallToolResult:
-        """Call a tool with the given input data"""
+        """Call a tool with the given input data.
+
+        The config lock is held only for the server lookup, then released
+        before the (potentially long) async tool execution.  This allows
+        concurrent tool calls to different servers to proceed in parallel.
+        """
         if "." not in tool_name:
             raise ValueError(f"Tool {tool_name} not found")
         server_name_part, tool_name_part = tool_name.split(".")
+        target_server = None
         with self.__lock:
             for server in self.servers:
                 if server.name == server_name_part and server.has_tool(tool_name_part):
-                    return await server.call_tool(tool_name_part, input_data)
+                    target_server = server
+                    break
+        if target_server is None:
             raise ValueError(f"Tool {tool_name} not found")
+        return await target_server.call_tool(tool_name_part, input_data)
 
 
 T = TypeVar("T")
@@ -927,9 +954,8 @@ class MCPClientBase(ABC):
     # tools: List[dict[str, Any]] # Defined in __init__
     # No self.session, self.exit_stack, self.stdio, self.write as persistent instance fields
 
-    __lock: ClassVar[threading.Lock] = threading.Lock()
-
     def __init__(self, server: Union[MCPServerLocal, MCPServerRemote]):
+        self._lock = threading.Lock()  # per-instance lock (was ClassVar, serialized unrelated servers)
         self.server = server
         self.tools: List[dict[str, Any]] = []  # Tools are cached on the client instance
         self.error: str = ""
@@ -1015,7 +1041,7 @@ class MCPClientBase(ABC):
 
         async def list_tools_op(current_session: ClientSession):
             response: ListToolsResult = await current_session.list_tools()
-            with self.__lock:
+            with self._lock:
                 self.tools = [
                     {
                         "name": tool.name,
@@ -1044,14 +1070,14 @@ class MCPClientBase(ABC):
             ).print(
                 f"MCPClientBase ({self.server.name}): 'update_tools' operation failed: {error_text}"
             )
-            with self.__lock:
+            with self._lock:
                 self.tools = []  # Ensure tools are cleared on failure
                 self.error = f"Failed to initialize. {error_text[:200]}{'...' if len(error_text) > 200 else ''}"  # store error from tools fetch
         return self
 
     def has_tool(self, tool_name: str) -> bool:
         """Check if a tool is available (uses cached tools)"""
-        with self.__lock:
+        with self._lock:
             for tool in self.tools:
                 if tool["name"] == tool_name:
                     return True
@@ -1059,7 +1085,7 @@ class MCPClientBase(ABC):
 
     def get_tools(self) -> List[dict[str, Any]]:
         """Get all tools from the server (uses cached tools)"""
-        with self.__lock:
+        with self._lock:
             return self.tools
 
     async def call_tool(
@@ -1165,6 +1191,12 @@ class MCPClientLocal(MCPClientBase):
 
 
 class CustomHTTPClientFactory(ABC):
+    # Explicit pool limits so concurrent MCP calls don't exhaust defaults
+    _POOL_LIMITS = httpx.Limits(
+        max_connections=40,
+        max_keepalive_connections=20,
+    )
+
     def __init__(self, verify: bool = True):
         self.verify = verify
 
@@ -1177,6 +1209,7 @@ class CustomHTTPClientFactory(ABC):
         # Set MCP defaults
         kwargs: dict[str, Any] = {
             "follow_redirects": True,
+            "limits": self._POOL_LIMITS,
         }
 
         # Handle timeout
