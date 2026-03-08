@@ -48,6 +48,14 @@ These values should not be scraped from settings files:
 - `install_A0.sh` uses `--defaults-only` during image build.
 - `install_A02.sh` skips the duplicate second preload pass.
 
+## Startup readiness
+
+- `GET /health` is liveness only and should stay cheap and unconditional.
+- `GET /ready` reports startup readiness and phase details separately from liveness.
+- Required readiness phases currently focus on core local startup, especially migration and chat restore.
+- MCP initialization is tracked in readiness output, but it is informational by default because optional integrations may not be started with the main container.
+- Set `A0_READY_REQUIRE_MCP=1` to make MCP initialization block readiness.
+
 ## Legacy compatibility
 
 `tmp/settings.json` is migration input only, not an active source of truth.

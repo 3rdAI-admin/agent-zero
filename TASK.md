@@ -2,6 +2,14 @@
 
 ## Completed
 
+### 2026-03-08: B3/B4 startup state model and readiness separation
+- **Archon task:** `8b992247-f4c8-44a4-8707-8ed1cb9c0161` (review)
+- **Fix:** Added `python/helpers/startup_state.py` and a `/ready` endpoint so startup readiness is tracked separately from `/health` liveness. Updated `startup.sh`, `restart.sh`, `show_status.sh`, and both validation scripts to surface readiness explicitly, support both HTTP and HTTPS probe paths, and report degraded optional phases without turning Docker health into a startup gate.
+
+### 2026-03-08: A1 preload build-time vs runtime split
+- **Archon task:** `a25c3e70-56df-4c85-984a-ef9e2cf9a670` (review)
+- **Fix:** Split preload into deterministic build-time defaults-only behavior versus runtime effective-settings behavior. Added `preload.py --defaults-only`, updated image install scripts to skip duplicate preload work, and added tests covering both build-time and runtime settings resolution.
+
 ### 2026-03-08: A0 runtime state discovery and legacy path cleanup
 - **Archon task:** `70728303-bac5-41f0-8bfd-751be9f4824e` (review)
 - **Fix:** Documented the effective runtime state model in `docs/developer/RUNTIME_STATE.md`, switched `preload.py` to resolve effective runtime settings instead of defaults-only state, delayed the `run_ui.py` runtime settings snapshot until after migration, and rewrote active MCP setup/validation scripts to derive the token from the live runtime instead of scraping legacy `tmp/settings.json`.

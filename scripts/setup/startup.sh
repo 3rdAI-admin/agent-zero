@@ -50,6 +50,27 @@ is_running() {
     docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
 }
 
+LAST_CONTAINER_SCHEME="http"
+
+container_endpoint_code() {
+    local path="$1"
+    local code="000"
+    local scheme
+    for scheme in http https; do
+        if [ "$scheme" = "https" ]; then
+            code=$(docker exec "$CONTAINER_NAME" curl -sk -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        else
+            code=$(docker exec "$CONTAINER_NAME" curl -s -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        fi
+        if [ "$code" != "000" ]; then
+            LAST_CONTAINER_SCHEME="$scheme"
+            echo "$code"
+            return 0
+        fi
+    done
+    echo "000"
+}
+
 show_logs() {
     local extra_args=("$@")
     if [ ${#extra_args[@]} -eq 0 ]; then
@@ -173,7 +194,8 @@ while [ $WAITED -lt $HEALTH_WAIT_MAX ]; do
         break
     fi
     # Also accept: Web UI /health responds (in case healthcheck not yet updated)
-    if docker exec "$CONTAINER_NAME" curl -fsS -o /dev/null --max-time 3 http://localhost:80/health 2>/dev/null; then
+    HEALTH_CODE=$(container_endpoint_code "/health")
+    if [ "$HEALTH_CODE" = "200" ]; then
         ok "Web UI responding."
         break
     fi
@@ -197,7 +219,7 @@ while [ $WAITED -lt $READY_WAIT_MAX ]; do
         docker logs --tail 30 "$CONTAINER_NAME" 2>/dev/null || true
         exit 1
     fi
-    READY_CODE=$(docker exec "$CONTAINER_NAME" curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:80/ready 2>/dev/null || echo "000")
+    READY_CODE=$(container_endpoint_code "/ready")
     if [ "$READY_CODE" = "200" ]; then
         ok "Application is ready."
         break

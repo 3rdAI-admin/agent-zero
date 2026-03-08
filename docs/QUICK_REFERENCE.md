@@ -212,8 +212,8 @@ HOST_PORT=9000 docker compose up -d
 Complete startup script that:
 - Checks Docker installation
 - Stops existing containers
-- Builds fresh image
 - Starts container
+- Waits for liveness (`/health`) and readiness (`/ready`)
 - Shows status and access info
 
 ### Quick Test Commands
@@ -225,8 +225,11 @@ open vnc://localhost:5901  # macOS
 # Test Claude Code
 docker exec agent-zero claude-pro-yolo "What is 2+2?"
 
-# Test Agent Zero Web UI
-curl http://localhost:8888
+# Test Agent Zero liveness
+curl http://localhost:8888/health
+
+# Test Agent Zero readiness
+curl http://localhost:8888/ready
 
 # Test security tools
 docker exec agent-zero nmap --version

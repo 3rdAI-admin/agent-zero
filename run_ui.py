@@ -708,7 +708,7 @@ def wait_for_health(host: str, port: int, scheme: str = "http"):
         try:
             with urllib.request.urlopen(url, timeout=2, context=ctx) as resp:
                 if resp.status == 200:
-                    PrintStyle().print("Agent Zero is running.")
+                    PrintStyle().print("Agent Zero is live.")
                     return
         except Exception:
             pass
@@ -735,13 +735,8 @@ def _watch_task(
 
 
 def _mcp_is_required() -> bool:
-    configured = (_settings or {}).get("mcp_servers", "")
-    if not configured:
-        return False
-    if isinstance(configured, str):
-        stripped = configured.strip()
-        return stripped not in ("", "{}", '{"mcpServers": {}}')
-    return bool(configured)
+    override = os.environ.get("A0_READY_REQUIRE_MCP", "").strip().lower()
+    return override in ("1", "true", "yes")
 
 
 def init_a0():
@@ -781,7 +776,10 @@ def init_a0():
         init_mcp,
         required=_mcp_is_required(),
         success_detail="MCP initialization completed.",
-        failure_detail="MCP initialization failed.",
+        failure_detail=(
+            "MCP initialization failed. This is informational unless "
+            "A0_READY_REQUIRE_MCP=1 is set."
+        ),
     )
     # start job loop
     initialize.initialize_job_loop()
