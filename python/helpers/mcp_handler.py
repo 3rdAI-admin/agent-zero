@@ -854,6 +854,34 @@ class MCPConfig(BaseModel):
 
         return prompt
 
+    def get_server_names(self) -> list[str]:
+        """Return the names of all configured MCP servers."""
+        with self.__lock:
+            return [server.name for server in self.servers]
+
+    def get_tool_names(self, server_name: str = "") -> list[str]:
+        """Return available tool names, optionally filtered to one server.
+
+        Args:
+            server_name: If provided, return only tools for this server
+                (without the server prefix). If empty, return all tools
+                in ``server.tool`` format.
+
+        Returns:
+            List of tool name strings.
+        """
+        with self.__lock:
+            names: list[str] = []
+            for server in self.servers:
+                if server_name and server.name != server_name:
+                    continue
+                for tool in server.get_tools():
+                    if server_name:
+                        names.append(tool["name"])
+                    else:
+                        names.append(f"{server.name}.{tool['name']}")
+            return names
+
     def has_tool(self, tool_name: str) -> bool:
         """Check if a tool is available"""
         if "." not in tool_name:

@@ -180,7 +180,40 @@ class CodeExecution(Tool):
         self.agent.set_data("_cet_state", self.state)
         return self.state
 
+    # Reason: Linux ARG_MAX is ~128KB. shlex.quote() adds escaping overhead,
+    # so the effective safe limit for code passed via `python3 -c` is lower.
+    # 100KB gives comfortable headroom.
+    MAX_CODE_SIZE = 100_000
+
+    # Reason: LLMs sometimes wrap code in triple-quote assignment patterns like
+    # `code = '''...'''` or `exec("""...""")`.  These are fragile: if the model
+    # truncates the closing quotes the code silently becomes invalid.  Catching
+    # the pattern early produces a clearer error than a downstream SyntaxError.
+    _WRAPPER_PATTERN = re.compile(
+        r"""^\s*\w+\s*=\s*(?:'''|\"\"\")|^\s*exec\s*\(\s*(?:'''|\"\"\")""",
+        re.MULTILINE,
+    )
+
     async def execute_python_code(self, session: int, code: str, reset: bool = False):
+        # Guard: reject oversized payloads before they hit OS ARG_MAX limits
+        if len(code) > self.MAX_CODE_SIZE:
+            warning = (
+                f"Code payload too large ({len(code):,} bytes, limit {self.MAX_CODE_SIZE:,}). "
+                "Write the code to a file and execute the file instead."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
+        # Guard: detect triple-quote wrapper patterns that risk truncation
+        if self._WRAPPER_PATTERN.search(code):
+            warning = (
+                "Code uses a triple-quote wrapper pattern (e.g. `code = '''...'''`) "
+                "which is fragile and prone to truncation. Write the code directly "
+                "without wrapping it in a string variable."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
         # Validate code completeness to prevent SyntaxError loops from truncated streams
         # (IMPROVE.md Task 2: FR-3.1)
         import ast
@@ -205,6 +238,14 @@ class CodeExecution(Tool):
         return await self.terminal_session(session, command, reset, prefix)
 
     async def execute_nodejs_code(self, session: int, code: str, reset: bool = False):
+        if len(code) > self.MAX_CODE_SIZE:
+            warning = (
+                f"Code payload too large ({len(code):,} bytes, limit {self.MAX_CODE_SIZE:,}). "
+                "Write the code to a file and execute the file instead."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
         escaped_code = shlex.quote(code)
         command = f"node /exe/node_eval.js {escaped_code}"
         prefix = "node> " + self.format_command_for_output(code) + "\n\n"

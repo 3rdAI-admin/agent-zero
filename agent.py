@@ -939,13 +939,26 @@ class Agent:
 
             # Fallback to local get_tool if MCP tool was not found or MCP lookup failed
             if not tool:
-                tool = self.get_tool(
-                    name=tool_name,
-                    method=tool_method,
-                    args=tool_args,
-                    message=msg,
-                    loop_data=self.loop_data,
-                )
+                # Guard: if the name looks like an MCP tool (contains a dot)
+                # but wasn't found, give a targeted correction instead of
+                # falling through to the generic Unknown tool handler which
+                # dumps the entire tools prompt.
+                if "." in tool_name:
+                    correction = self._mcp_tool_not_found_message(tool_name)
+                    self.hist_add_warning(correction)
+                    PrintStyle(font_color="orange", padding=True).print(correction)
+                    self.context.log.log(
+                        type="warning",
+                        content=f"{self.agent_name}: {correction}",
+                    )
+                else:
+                    tool = self.get_tool(
+                        name=tool_name,
+                        method=tool_method,
+                        args=tool_args,
+                        message=msg,
+                        loop_data=self.loop_data,
+                    )
 
             if tool:
                 self.loop_data.current_tool = tool  # type: ignore
@@ -1116,6 +1129,39 @@ class Agent:
             loop_data=loop_data,
             **kwargs,
         )
+
+    def _mcp_tool_not_found_message(self, tool_name: str) -> str:
+        """Build a targeted correction when a dot-separated MCP tool name is not found.
+
+        Args:
+            tool_name: The ``server.tool`` name that failed lookup.
+
+        Returns:
+            A correction string listing available tools for the server, or
+            available server names if the server itself is unknown.
+        """
+        try:
+            import python.helpers.mcp_handler as mcp_helper
+
+            mcp_config = mcp_helper.MCPConfig.get_instance()
+            server_part, tool_part = tool_name.split(".", 1)
+            server_names = mcp_config.get_server_names()
+
+            if server_part in server_names:
+                available = mcp_config.get_tool_names(server_part)
+                tools_list = ", ".join(available) if available else "(none)"
+                return (
+                    f"Unknown MCP tool '{tool_name}'. "
+                    f"Available tools on server '{server_part}': {tools_list}"
+                )
+            else:
+                servers_list = ", ".join(server_names) if server_names else "(none)"
+                return (
+                    f"Unknown MCP server '{server_part}' in tool name '{tool_name}'. "
+                    f"Available MCP servers: {servers_list}"
+                )
+        except Exception:
+            return f"Unknown tool '{tool_name}'. Could not retrieve available MCP tools."
 
     async def call_extensions(self, extension_point: str, **kwargs) -> Any:
         return await call_extensions(
