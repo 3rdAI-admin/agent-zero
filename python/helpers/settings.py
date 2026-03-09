@@ -123,6 +123,7 @@ class Settings(TypedDict):
     memory_memorize_enabled: bool
     memory_memorize_consolidation: bool
     memory_memorize_replace_threshold: float
+    memory_backend: str  # "faiss" (default) or "sqlite"
 
     api_keys: dict[str, str]
 
@@ -636,6 +637,7 @@ def get_default_settings() -> Settings:
         memory_memorize_replace_threshold=get_default_value(
             "memory_memorize_replace_threshold", 0.9
         ),
+        memory_backend=get_default_value("memory_backend", "faiss"),
         api_keys={},
         auth_login="",
         auth_password="",

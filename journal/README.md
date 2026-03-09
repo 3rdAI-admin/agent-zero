@@ -27,3 +27,4 @@
 - 2026-03-08 | validate-project | Pass (P1–P5 OK; 312/312 tests; E:0 W:0; ruff format fixes applied)
 - 2026-03-08 | validate-project --thorough | Pass (P1–P5 OK; 335/335 tests; E:0 W:0; Phase 2d browser domain policy shipped)
 - 2026-03-08 | validate-project --thorough | Pass (P1–P5 OK; 342/342 tests; E:0 W:0; E2E 12/12; post-Cursor review, reliability suite integrated)
+- 2026-03-08 | validate-project | Pass (366/366 tests; E:0 W:0; SQLite Hybrid Memory Phase 1 shipped)

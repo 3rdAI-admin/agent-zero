@@ -1,58 +1,86 @@
+"""Memory orchestration layer.
+
+The Memory class manages memory backends (FAISS, SQLite, etc.) through the
+MemoryBackend abstract interface. It handles initialization, caching, knowledge
+preloading, and document lifecycle — delegating storage to the active backend.
+"""
+
 from datetime import datetime
-from typing import Any, List, Sequence, Union
-from langchain.storage import InMemoryByteStore, LocalFileStore
-from langchain.embeddings import CacheBackedEmbeddings
-from python.helpers import guids
+from typing import Any
 
-# from langchain_chroma import Chroma
-from langchain_community.vectorstores import FAISS
-
-# faiss needs to be patched for python 3.12 on arm #TODO remove once not needed
-from python.helpers import faiss_monkey_patch  # noqa: F401 (side-effect before faiss)
-import faiss
-
-
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.vectorstores.utils import (
-    DistanceStrategy,
-)
-
-import os
 import json
+import logging
+import os
 
-import numpy as np
-
-from python.helpers.print_style import PrintStyle
-from . import files
 from langchain_core.documents import Document
-from python.helpers import knowledge_import
+
+from python.helpers import files, guids, knowledge_import
 from python.helpers.log import LogItem
+from python.helpers.memory_backend import MemoryBackend
+from python.helpers.print_style import PrintStyle
 from enum import Enum
 from agent import Agent, AgentContext
 import models
-import logging
 from simpleeval import simple_eval
-
 
 # Raise the log level so WARNING messages aren't shown
 logging.getLogger("langchain_core.vectorstores.base").setLevel(logging.ERROR)
 
 
-class MyFaiss(FAISS):
-    # override aget_by_ids
-    def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
-        # return all self.docstore._dict[id] in ids
-        return [
-            self.docstore._dict[id]  # type: ignore[attr-defined]
-            for id in (ids if isinstance(ids, list) else [ids])
-            if id in self.docstore._dict  # type: ignore[attr-defined]
-        ]
+def _create_backend(
+    model_config: "models.ModelConfig",
+    memory_subdir: str,
+    in_memory: bool = False,
+    log_item: LogItem | None = None,
+) -> tuple[MemoryBackend, bool]:
+    """Create the appropriate memory backend based on settings.
 
-    async def aget_by_ids(self, ids: Sequence[str], /) -> List[Document]:
-        return self.get_by_ids(ids)
+    Args:
+        model_config: Embedding model configuration.
+        memory_subdir: Memory subdirectory name.
+        in_memory: Whether to use in-memory storage.
+        log_item: Optional log item for progress updates.
 
-    def get_all_docs(self):
-        return self.docstore._dict  # type: ignore
+    Returns:
+        Tuple of (MemoryBackend, created: bool).
+    """
+    # Reason: Import here to avoid circular imports and to support future
+    # backend selection via settings (e.g., MEMORY_BACKEND=sqlite).
+
+    backend_type = _get_backend_type()
+    db_dir = abs_db_dir(memory_subdir)
+
+    if backend_type == "sqlite":
+        from python.helpers.memory_sqlite import SQLiteMemoryBackend
+
+        return SQLiteMemoryBackend.initialize(
+            model_config=model_config,
+            db_dir=db_dir,
+            in_memory=in_memory,
+        )
+    else:
+        from python.helpers.memory_faiss import FAISSMemoryBackend
+
+        return FAISSMemoryBackend.initialize(
+            model_config=model_config,
+            db_dir=db_dir,
+            in_memory=in_memory,
+        )
+
+
+def _get_backend_type() -> str:
+    """Read the memory backend type from settings.
+
+    Returns:
+        'faiss' (default) or 'sqlite'.
+    """
+    try:
+        from python.helpers import settings
+
+        s = settings.get_settings()
+        return s.get("memory_backend", "faiss")  # type: ignore
+    except Exception:
+        return "faiss"
 
 
 class Memory:
@@ -61,24 +89,37 @@ class Memory:
         FRAGMENTS = "fragments"
         SOLUTIONS = "solutions"
 
-    index: dict[str, "MyFaiss"] = {}
+    # Cache: memory_subdir -> MemoryBackend
+    index: dict[str, MemoryBackend] = {}
 
     @staticmethod
-    async def get(agent: Agent):
+    async def get(agent: Agent) -> "Memory":
+        """Get or initialize memory for an agent.
+
+        Args:
+            agent: The agent requesting memory access.
+
+        Returns:
+            Memory: Initialized memory wrapper.
+        """
         memory_subdir = get_agent_memory_subdir(agent)
         if Memory.index.get(memory_subdir) is None:
             log_item = agent.context.log.log(
                 type="util",
                 heading=f"Initializing VectorDB in '/{memory_subdir}'",
             )
-            db, created = Memory.initialize(
-                log_item,
-                agent.config.embeddings_model,
-                memory_subdir,
-                False,
+            PrintStyle.standard("Initializing VectorDB...")
+            if log_item:
+                log_item.stream(progress="\nInitializing VectorDB")
+
+            backend, created = _create_backend(
+                model_config=agent.config.embeddings_model,
+                memory_subdir=memory_subdir,
+                in_memory=False,
+                log_item=log_item,
             )
-            Memory.index[memory_subdir] = db
-            wrap = Memory(db, memory_subdir=memory_subdir)
+            Memory.index[memory_subdir] = backend
+            wrap = Memory(backend, memory_subdir=memory_subdir)
             knowledge_subdirs = get_knowledge_subdirs_by_memory_subdir(
                 memory_subdir, agent.config.knowledge_subdirs or []
             )
@@ -96,19 +137,30 @@ class Memory:
         memory_subdir: str,
         log_item: LogItem | None = None,
         preload_knowledge: bool = True,
-    ):
+    ) -> "Memory":
+        """Get or initialize memory by explicit subdirectory.
+
+        Args:
+            memory_subdir: Memory subdirectory name.
+            log_item: Optional log item for progress updates.
+            preload_knowledge: Whether to preload knowledge files.
+
+        Returns:
+            Memory: Initialized memory wrapper.
+        """
         if not Memory.index.get(memory_subdir):
             import initialize
 
             agent_config = initialize.initialize_agent()
             model_config = agent_config.embeddings_model
-            db, _created = Memory.initialize(
-                log_item=log_item,
+
+            backend, _created = _create_backend(
                 model_config=model_config,
                 memory_subdir=memory_subdir,
                 in_memory=False,
+                log_item=log_item,
             )
-            wrap = Memory(db, memory_subdir=memory_subdir)
+            wrap = Memory(backend, memory_subdir=memory_subdir)
             if preload_knowledge:
                 knowledge_subdirs = get_knowledge_subdirs_by_memory_subdir(
                     memory_subdir, agent_config.knowledge_subdirs or []
@@ -117,150 +169,50 @@ class Memory:
                     await wrap.preload_knowledge(
                         log_item, knowledge_subdirs, memory_subdir
                     )
-            Memory.index[memory_subdir] = db
+            Memory.index[memory_subdir] = backend
         return Memory(db=Memory.index[memory_subdir], memory_subdir=memory_subdir)
 
     @staticmethod
-    async def reload(agent: Agent):
+    async def reload(agent: Agent) -> "Memory":
+        """Clear cached backend and reinitialize from disk.
+
+        Args:
+            agent: The agent requesting reload.
+
+        Returns:
+            Memory: Freshly initialized memory wrapper.
+        """
         memory_subdir = get_agent_memory_subdir(agent)
         if Memory.index.get(memory_subdir):
             del Memory.index[memory_subdir]
         return await Memory.get(agent)
 
-    @staticmethod
-    def initialize(
-        log_item: LogItem | None,
-        model_config: models.ModelConfig,
-        memory_subdir: str,
-        in_memory=False,
-    ) -> tuple[MyFaiss, bool]:
-        PrintStyle.standard("Initializing VectorDB...")
-
-        if log_item:
-            log_item.stream(progress="\nInitializing VectorDB")
-
-        em_dir = files.get_abs_path(
-            "tmp/memory/embeddings"
-        )  # just caching, no need to parameterize
-        db_dir = abs_db_dir(memory_subdir)
-
-        # make sure embeddings and database directories exist
-        os.makedirs(db_dir, exist_ok=True)
-
-        if in_memory:
-            store: Union[InMemoryByteStore, LocalFileStore] = InMemoryByteStore()
-        else:
-            os.makedirs(em_dir, exist_ok=True)
-            store = LocalFileStore(em_dir)
-
-        embeddings_model = models.get_embedding_model(
-            model_config.provider,
-            model_config.name,
-            **model_config.build_kwargs(),
-        )
-        embeddings_model_id = files.safe_file_name(
-            model_config.provider + "_" + model_config.name
-        )
-
-        # here we setup the embeddings model with the chosen cache storage
-        embedder = CacheBackedEmbeddings.from_bytes_store(
-            embeddings_model, store, namespace=embeddings_model_id
-        )
-
-        # initial DB and docs variables
-        db: MyFaiss | None = None
-        docs: dict[str, Document] | None = None
-
-        created = False
-
-        # if db folder exists and is not empty:
-        if os.path.exists(db_dir) and files.exists(db_dir, "index.faiss"):
-            db = MyFaiss.load_local(
-                folder_path=db_dir,
-                embeddings=embedder,
-                allow_dangerous_deserialization=True,
-                distance_strategy=DistanceStrategy.COSINE,
-                # normalize_L2=True,
-                relevance_score_fn=Memory._cosine_normalizer,
-            )  # type: ignore
-
-            # if there is a mismatch in embeddings used, re-index the whole DB
-            emb_ok = False
-            emb_set_file = files.get_abs_path(db_dir, "embedding.json")
-            if files.exists(emb_set_file):
-                embedding_set = json.loads(files.read_file(emb_set_file))
-                if (
-                    embedding_set["model_provider"] == model_config.provider
-                    and embedding_set["model_name"] == model_config.name
-                ):
-                    # model matches
-                    emb_ok = True
-
-            # re-index -  create new DB and insert existing docs
-            if db and not emb_ok:
-                docs = db.get_all_docs()
-                db = None
-
-        # DB not loaded, create one
-        if not db:
-            index = faiss.IndexFlatIP(len(embedder.embed_query("example")))
-
-            db = MyFaiss(
-                embedding_function=embedder,
-                index=index,
-                docstore=InMemoryDocstore(),
-                index_to_docstore_id={},
-                distance_strategy=DistanceStrategy.COSINE,
-                # normalize_L2=True,
-                relevance_score_fn=Memory._cosine_normalizer,
-            )
-
-            # insert docs if reindexing
-            if docs:
-                PrintStyle.standard("Indexing memories...")
-                if log_item:
-                    log_item.stream(progress="\nIndexing memories")
-                db.add_documents(documents=list(docs.values()), ids=list(docs.keys()))
-
-            # save DB
-            Memory._save_db_file(db, memory_subdir)
-            # save meta file
-            meta_file_path = files.get_abs_path(db_dir, "embedding.json")
-            files.write_file(
-                meta_file_path,
-                json.dumps(
-                    {
-                        "model_provider": model_config.provider,
-                        "model_name": model_config.name,
-                    }
-                ),
-            )
-
-            created = True
-
-        return db, created
-
     def __init__(
         self,
-        db: MyFaiss,
+        db: MemoryBackend,
         memory_subdir: str,
     ):
         self.db = db
         self.memory_subdir = memory_subdir
 
+    # ── Knowledge preloading ─────────────────────────────────────────────
+
     async def preload_knowledge(
         self, log_item: LogItem | None, kn_dirs: list[str], memory_subdir: str
-    ):
+    ) -> None:
+        """Preload knowledge files into the memory backend.
+
+        Args:
+            log_item: Optional log item for progress updates.
+            kn_dirs: Knowledge subdirectories to load.
+            memory_subdir: Memory subdirectory name.
+        """
         if log_item:
             log_item.update(heading="Preloading knowledge...")
 
-        # db abs path
         db_dir = abs_db_dir(memory_subdir)
-
-        # Load the index file if it exists
         index_path = files.get_abs_path(db_dir, "knowledge_import.json")
 
-        # make sure directory exists
         if not os.path.exists(db_dir):
             os.makedirs(db_dir)
 
@@ -269,25 +221,22 @@ class Memory:
             with open(index_path, "r") as f:
                 index = json.load(f)
 
-        # preload knowledge folders
         index = self._preload_knowledge_folders(log_item, kn_dirs, index)
 
         for file in index:
             if index[file]["state"] in ["changed", "removed"] and index[file].get(
                 "ids", []
-            ):  # for knowledge files that have been changed or removed and have IDs
-                await self.delete_documents_by_ids(
-                    index[file]["ids"]
-                )  # remove original version
+            ):
+                await self.delete_documents_by_ids(index[file]["ids"])
             if index[file]["state"] == "changed":
                 index[file]["ids"] = await self.insert_documents(
                     index[file]["documents"]
-                )  # insert new version
+                )
 
-        # remove index where state="removed"
+        # Remove entries for removed files
         index = {k: v for k, v in index.items() if v["state"] != "removed"}
 
-        # strip state and documents from index and save it
+        # Strip transient fields and persist index
         for file in index:
             if "documents" in index[file]:
                 del index[file]["documents"]  # type: ignore
@@ -301,10 +250,19 @@ class Memory:
         log_item: LogItem | None,
         kn_dirs: list[str],
         index: dict[str, knowledge_import.KnowledgeImport],
-    ):
-        # load knowledge folders, subfolders by area
+    ) -> dict[str, knowledge_import.KnowledgeImport]:
+        """Load knowledge from directories, organized by area.
+
+        Args:
+            log_item: Optional log item for progress updates.
+            kn_dirs: Knowledge subdirectories.
+            index: Current knowledge import index.
+
+        Returns:
+            Updated knowledge import index.
+        """
         for kn_dir in kn_dirs:
-            # everything in the root of the knowledge goes to main
+            # Root files go to MAIN area
             index = knowledge_import.load_knowledge(
                 log_item,
                 abs_knowledge_dir(kn_dir),
@@ -313,126 +271,165 @@ class Memory:
                 filename_pattern="*",
                 recursive=False,
             )
-            # subdirectories go to their folders
+            # Subdirectories go to their named areas
             for area in Memory.Area:
                 index = knowledge_import.load_knowledge(
                     log_item,
-                    # files.get_abs_path("knowledge", kn_dir, area.value),
                     abs_knowledge_dir(kn_dir, area.value),
                     index,
                     {"area": area.value},
                     recursive=True,
                 )
-
         return index
 
+    # ── Document operations (delegate to backend) ────────────────────────
+
     def get_document_by_id(self, id: str) -> Document | None:
-        return self.db.get_by_ids(id)[0]
+        """Retrieve a single document by ID.
+
+        Args:
+            id: Document ID.
+
+        Returns:
+            Document or None if not found.
+        """
+        docs = self.db.get_by_ids([id])
+        return docs[0] if docs else None
 
     async def search_similarity_threshold(
         self, query: str, limit: int, threshold: float, filter: str = ""
-    ):
-        comparator = Memory._get_comparator(filter) if filter else None
+    ) -> list[Document]:
+        """Search for similar documents above a threshold.
 
-        return await self.db.asearch(
-            query,
-            search_type="similarity_score_threshold",
-            k=limit,
-            score_threshold=threshold,
-            filter=comparator,
+        Args:
+            query: Search query text.
+            limit: Maximum results.
+            threshold: Minimum similarity score.
+            filter: Optional simpleeval filter expression.
+
+        Returns:
+            list[Document]: Matching documents.
+        """
+        comparator = Memory._get_comparator(filter) if filter else None
+        return await self.db.search_similarity_threshold(
+            query, limit, threshold, filter_fn=comparator
         )
 
     async def delete_documents_by_query(
         self, query: str, threshold: float, filter: str = ""
-    ):
+    ) -> list[Document]:
+        """Delete documents matching a semantic query.
+
+        Args:
+            query: Search query text.
+            threshold: Minimum similarity for deletion.
+            filter: Optional simpleeval filter expression.
+
+        Returns:
+            list[Document]: Deleted documents.
+        """
         k = 100
         tot = 0
-        removed = []
+        removed: list[Document] = []
 
         while True:
-            # Perform similarity search with score
             docs = await self.search_similarity_threshold(
                 query, limit=k, threshold=threshold, filter=filter
             )
             removed += docs
 
-            # Extract document IDs and filter based on score
-            # document_ids = [result[0].metadata["id"] for result in docs if result[1] < score_limit]
             document_ids = [result.metadata["id"] for result in docs]
 
-            # Delete documents with IDs over the threshold score
             if document_ids:
-                # fnd = self.db.get(where={"id": {"$in": document_ids}})
-                # if fnd["ids"]: self.db.delete(ids=fnd["ids"])
-                # tot += len(fnd["ids"])
-                await self.db.adelete(ids=document_ids)
+                await self.db.delete_by_ids(document_ids)
                 tot += len(document_ids)
 
-            # If fewer than K document IDs, break the loop
             if len(document_ids) < k:
                 break
 
-        if tot:
-            self._save_db()  # persist
         return removed
 
-    async def delete_documents_by_ids(self, ids: list[str]):
-        # aget_by_ids is not yet implemented in faiss, need to do a workaround
-        rem_docs = await self.db.aget_by_ids(
-            ids
-        )  # existing docs to remove (prevents error)
-        if rem_docs:
-            rem_ids = [doc.metadata["id"] for doc in rem_docs]  # ids to remove
-            await self.db.adelete(ids=rem_ids)
+    async def delete_documents_by_ids(self, ids: list[str]) -> list[Document]:
+        """Delete documents by their IDs.
 
-        if rem_docs:
-            self._save_db()  # persist
-        return rem_docs
+        Args:
+            ids: Document IDs to delete.
 
-    async def insert_text(self, text, metadata: dict = {}):
+        Returns:
+            list[Document]: Deleted documents.
+        """
+        return await self.db.delete_by_ids(ids)
+
+    async def insert_text(self, text: str, metadata: dict = {}) -> str:
+        """Insert a single text as a document.
+
+        Args:
+            text: Document content.
+            metadata: Optional metadata.
+
+        Returns:
+            str: The assigned document ID.
+        """
         doc = Document(text, metadata=metadata)
         ids = await self.insert_documents([doc])
         return ids[0]
 
-    async def insert_documents(self, docs: list[Document]):
+    async def insert_documents(self, docs: list[Document]) -> list[str]:
+        """Insert documents with auto-generated IDs and timestamps.
+
+        Args:
+            docs: Documents to insert.
+
+        Returns:
+            list[str]: Assigned document IDs.
+        """
         ids = [self._generate_doc_id() for _ in range(len(docs))]
         timestamp = self.get_timestamp()
 
         if ids:
             for doc, id in zip(docs, ids):
-                doc.metadata["id"] = id  # add ids to documents metadata
-                doc.metadata["timestamp"] = timestamp  # add timestamp
+                doc.metadata["id"] = id
+                doc.metadata["timestamp"] = timestamp
                 if not doc.metadata.get("area", ""):
                     doc.metadata["area"] = Memory.Area.MAIN.value
 
-            await self.db.aadd_documents(documents=docs, ids=ids)
-            self._save_db()  # persist
+            await self.db.insert_documents(docs, ids)
         return ids
 
-    async def update_documents(self, docs: list[Document]):
+    async def update_documents(self, docs: list[Document]) -> list[str]:
+        """Update existing documents by ID.
+
+        Args:
+            docs: Documents with updated content (must have metadata["id"]).
+
+        Returns:
+            list[str]: Updated document IDs.
+        """
         ids = [doc.metadata["id"] for doc in docs]
-        await self.db.adelete(ids=ids)  # delete originals
-        ins = await self.db.aadd_documents(documents=docs, ids=ids)  # add updated
-        self._save_db()  # persist
-        return ins
+        await self.db.update_documents(docs, ids)
+        return ids
 
-    def _save_db(self):
-        Memory._save_db_file(self.db, self.memory_subdir)
+    # ── Helpers ──────────────────────────────────────────────────────────
 
-    def _generate_doc_id(self):
+    def _generate_doc_id(self) -> str:
+        """Generate a unique document ID."""
         while True:
-            doc_id = guids.generate_id(10)  # random ID
-            if not self.db.get_by_ids(doc_id):  # check if exists
+            doc_id = guids.generate_id(10)
+            if not self.db.get_by_ids([doc_id]):
                 return doc_id
 
     @staticmethod
-    def _save_db_file(db: MyFaiss, memory_subdir: str):
-        abs_dir = abs_db_dir(memory_subdir)
-        db.save_local(folder_path=abs_dir)
-
-    @staticmethod
     def _get_comparator(condition: str):
-        def comparator(data: dict[str, Any]):
+        """Create a metadata filter function from a simpleeval expression.
+
+        Args:
+            condition: A simpleeval expression (e.g., "area == 'main'").
+
+        Returns:
+            Callable that evaluates the condition against metadata.
+        """
+
+        def comparator(data: dict[str, Any]) -> bool:
             try:
                 result = simple_eval(condition, names=data)
                 return result
@@ -443,20 +440,15 @@ class Memory:
         return comparator
 
     @staticmethod
-    def _score_normalizer(val: float) -> float:
-        res = 1 - 1 / (1 + np.exp(val))
-        return res
-
-    @staticmethod
-    def _cosine_normalizer(val: float) -> float:
-        res = (1 + val) / 2
-        res = max(
-            0, min(1, res)
-        )  # float precision can cause values like 1.0000000596046448
-        return res
-
-    @staticmethod
     def format_docs_plain(docs: list[Document]) -> list[str]:
+        """Format documents as plain text with metadata.
+
+        Args:
+            docs: Documents to format.
+
+        Returns:
+            list[str]: Formatted document strings.
+        """
         result = []
         for doc in docs:
             text = ""
@@ -467,11 +459,30 @@ class Memory:
         return result
 
     @staticmethod
-    def get_timestamp():
+    def get_timestamp() -> str:
+        """Get current timestamp string.
+
+        Returns:
+            str: Formatted as 'YYYY-MM-DD HH:MM:SS'.
+        """
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+# ── Module-level helper functions ────────────────────────────────────────
+
+
 def get_custom_knowledge_subdir_abs(agent: Agent) -> str:
+    """Get absolute path for agent's custom knowledge subdirectory.
+
+    Args:
+        agent: The agent instance.
+
+    Returns:
+        str: Absolute path to the custom knowledge directory.
+
+    Raises:
+        Exception: If no custom knowledge subdir is configured.
+    """
     for dir in agent.config.knowledge_subdirs:
         if dir != "default":
             if dir == "custom":
@@ -480,30 +491,43 @@ def get_custom_knowledge_subdir_abs(agent: Agent) -> str:
     raise Exception("No custom knowledge subdir set")
 
 
-def reload():
-    # clear the memory index, this will force all DBs to reload
+def reload() -> None:
+    """Clear the memory index cache, forcing all backends to reload."""
     Memory.index = {}
 
 
 def abs_db_dir(memory_subdir: str) -> str:
-    # patch for projects, this way we don't need to re-work the structure of memory subdirs
+    """Resolve absolute database directory path.
+
+    Args:
+        memory_subdir: Memory subdirectory name.
+
+    Returns:
+        str: Absolute path to the database directory.
+    """
     if memory_subdir.startswith("projects/"):
         from python.helpers.projects import get_project_meta_folder
 
         return files.get_abs_path(get_project_meta_folder(memory_subdir[9:]), "memory")
-    # standard subdirs
     return files.get_abs_path("usr/memory", memory_subdir)
 
 
 def abs_knowledge_dir(knowledge_subdir: str, *sub_dirs: str) -> str:
-    # patch for projects, this way we don't need to re-work the structure of knowledge subdirs
+    """Resolve absolute knowledge directory path.
+
+    Args:
+        knowledge_subdir: Knowledge subdirectory name.
+        *sub_dirs: Additional subdirectory components.
+
+    Returns:
+        str: Absolute path to the knowledge directory.
+    """
     if knowledge_subdir.startswith("projects/"):
         from python.helpers.projects import get_project_meta_folder
 
         return files.get_abs_path(
             get_project_meta_folder(knowledge_subdir[9:]), "knowledge", *sub_dirs
         )
-    # standard subdirs
     if knowledge_subdir == "default":
         return files.get_abs_path("knowledge", *sub_dirs)
     if knowledge_subdir == "custom":
@@ -512,17 +536,39 @@ def abs_knowledge_dir(knowledge_subdir: str, *sub_dirs: str) -> str:
 
 
 def get_memory_subdir_abs(agent: Agent) -> str:
+    """Get absolute path for agent's memory subdirectory.
+
+    Args:
+        agent: The agent instance.
+
+    Returns:
+        str: Absolute path.
+    """
     subdir = get_agent_memory_subdir(agent)
     return abs_db_dir(subdir)
 
 
 def get_agent_memory_subdir(agent: Agent) -> str:
-    # if project is active, use project memory subdir
+    """Get memory subdirectory for an agent.
+
+    Args:
+        agent: The agent instance.
+
+    Returns:
+        str: Memory subdirectory name.
+    """
     return get_context_memory_subdir(agent.context)
 
 
 def get_context_memory_subdir(context: AgentContext) -> str:
-    # if project is active, use project memory subdir
+    """Get memory subdirectory for an agent context.
+
+    Args:
+        context: The agent context.
+
+    Returns:
+        str: Memory subdirectory name.
+    """
     from python.helpers.projects import (
         get_context_memory_subdir as get_project_memory_subdir,
     )
@@ -531,28 +577,35 @@ def get_context_memory_subdir(context: AgentContext) -> str:
     if memory_subdir:
         return memory_subdir
 
-    # no project, regular memory subdir
     return context.config.memory_subdir or "default"
 
 
 def get_existing_memory_subdirs() -> list[str]:
+    """List all existing memory subdirectories.
+
+    Returns:
+        list[str]: Memory subdirectory names (always includes 'default').
+    """
     try:
         from python.helpers.projects import (
             get_project_meta_folder,
             get_projects_parent_folder,
         )
 
-        # Get subdirectories from memory folder
         subdirs = files.get_subdirectories("usr/memory")
 
         project_subdirs = files.get_subdirectories(get_projects_parent_folder())
         for project_subdir in project_subdirs:
-            if files.exists(
+            # Check for either FAISS or SQLite index files
+            has_faiss = files.exists(
                 get_project_meta_folder(project_subdir), "memory", "index.faiss"
-            ):
+            )
+            has_sqlite = files.exists(
+                get_project_meta_folder(project_subdir), "memory", "memory.db"
+            )
+            if has_faiss or has_sqlite:
                 subdirs.append(f"projects/{project_subdir}")
 
-        # Ensure 'default' is always available
         if "default" not in subdirs:
             subdirs.insert(0, "default")
 
@@ -565,6 +618,15 @@ def get_existing_memory_subdirs() -> list[str]:
 def get_knowledge_subdirs_by_memory_subdir(
     memory_subdir: str, default: list[str]
 ) -> list[str]:
+    """Get knowledge subdirectories associated with a memory subdirectory.
+
+    Args:
+        memory_subdir: Memory subdirectory name.
+        default: Default knowledge subdirectories.
+
+    Returns:
+        list[str]: Knowledge subdirectories.
+    """
     if memory_subdir.startswith("projects/"):
         from python.helpers.projects import get_project_meta_folder
 
