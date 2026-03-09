@@ -25,3 +25,4 @@
 - 2026-03-08 | validate-project | Pass (P1–P5 273/273; A2 MCP tool-name validation shipped)
 - 2026-03-08 | validate-project --thorough | Fail (P1 lint fail; P3 format fail; P4 312/312; P5 OK; W:1 MCP endpoint 403)
 - 2026-03-08 | validate-project | Pass (P1–P5 OK; 312/312 tests; E:0 W:0; ruff format fixes applied)
+- 2026-03-08 | validate-project --thorough | Pass (P1–P5 OK; 335/335 tests; E:0 W:0; Phase 2d browser domain policy shipped)
