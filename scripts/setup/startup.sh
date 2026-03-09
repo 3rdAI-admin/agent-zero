@@ -40,6 +40,7 @@ STOP_TIMEOUT=30
 HEALTH_WAIT_MAX=90
 READY_WAIT_MAX=90
 GITHUB_TIMEOUT=8
+ARCHON_NETWORK_NAME="archon_app-network"
 
 info()  { echo -e "${CYAN}[INFO]${NC} $1"; }
 ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -48,6 +49,11 @@ fail()  { echo -e "${RED}[FAIL]${NC} $1"; }
 
 is_running() {
     docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
+}
+
+is_connected_to_network() {
+    local network_name="$1"
+    docker inspect --format '{{json .NetworkSettings.Networks}}' "$CONTAINER_NAME" 2>/dev/null | grep -q "\"${network_name}\""
 }
 
 LAST_CONTAINER_SCHEME="http"
@@ -77,6 +83,46 @@ show_logs() {
         extra_args=(-f --tail "${LOG_TAIL_LINES:-200}")
     fi
     exec "${DOCKER_COMPOSE_CMD[@]}" logs "${extra_args[@]}" "$CONTAINER_NAME"
+}
+
+attach_optional_archon_network() {
+    if ! is_running; then
+        return
+    fi
+
+    if ! docker network inspect "$ARCHON_NETWORK_NAME" >/dev/null 2>&1; then
+        warn "Optional external network ${ARCHON_NETWORK_NAME} not present; Archon Docker DNS access will be unavailable."
+        return
+    fi
+
+    if is_connected_to_network "$ARCHON_NETWORK_NAME"; then
+        info "Optional external network ${ARCHON_NETWORK_NAME} already connected."
+        return
+    fi
+
+    if docker network connect "$ARCHON_NETWORK_NAME" "$CONTAINER_NAME" >/dev/null 2>&1; then
+        ok "Connected optional external network ${ARCHON_NETWORK_NAME}."
+    else
+        warn "Could not connect optional external network ${ARCHON_NETWORK_NAME}; continuing without it."
+    fi
+}
+
+warn_optional_dependencies() {
+    local service
+    for service in ollama workspace_mcp; do
+        if "${DOCKER_COMPOSE_CMD[@]}" ps --status running --services 2>/dev/null | grep -qx "$service"; then
+            continue
+        fi
+
+        case "$service" in
+            ollama)
+                warn "Optional service ollama is not running; Ollama-based presets and local LLM API targets may be unavailable."
+                ;;
+            workspace_mcp)
+                warn "Optional service workspace_mcp is not running; Google Workspace MCP tools will be unavailable until started."
+                ;;
+        esac
+    done
 }
 
 if [ "${1:-}" = "--logs" ]; then
@@ -177,6 +223,8 @@ if ! "${DOCKER_COMPOSE_CMD[@]}" up -d agent-zero; then
     exit 1
 fi
 ok "Start command issued."
+attach_optional_archon_network
+warn_optional_dependencies
 
 # ─── 3. Health check ──────────────────────────────────────────────────────
 info "Waiting for health (max ${HEALTH_WAIT_MAX}s)..."

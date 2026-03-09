@@ -296,6 +296,9 @@ def csrf_protect(f):
 
 @webapp.route("/login", methods=["GET", "POST"])
 async def login_handler():
+    if not login.is_login_required():
+        return redirect(url_for("serve_index"))
+
     error = None
     if request.method == "POST":
         user = dotenv.get_dotenv_value("AUTH_LOGIN") or ""
@@ -321,6 +324,8 @@ async def login_handler():
 @webapp.route("/logout")
 async def logout_handler():
     session.pop("authentication", None)
+    if not login.is_login_required():
+        return redirect(url_for("serve_index"))
     return redirect(url_for("login_handler"))
 
 

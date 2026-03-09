@@ -56,10 +56,16 @@ services:
     # network_mode: host
     # Option 2: Bridge mode with capabilities (CURRENT - keeps port 8888, allows scanning)
     # Keep network_mode commented and use cap_add below
+    cap_drop:
+      - ALL
     cap_add:
-      - NET_RAW      # Required for nmap and other raw socket tools
-      - NET_ADMIN    # Required for advanced network operations
-      - SYS_ADMIN    # May be needed for some security tools
+      - CHOWN        # Runtime setup hands Claude files to the non-root claude user
+      - NET_RAW      # Required for raw-socket tools such as nmap host discovery
+      - NET_BIND_SERVICE  # Required because the stack still binds ports 22 and 80
+      - SETUID       # Required for supervisor/sshd to drop privileges to service users
+      - SETGID       # Required for supervisor/sshd to drop privileges to service groups
+    security_opt:
+      - no-new-privileges:true
     # Hostname resolution: host gateway + optional LAN machines so the container can resolve names (ping, nmap, ssh, etc.)
     # Syntax: "hostname:ip" per line. Use host-gateway for the host machine. Add your LAN hosts below.
     extra_hosts:
@@ -68,14 +74,18 @@ services:
       # - "nas:192.168.50.5"
       # - "my-server:192.168.50.10"
       # - "router:192.168.50.1"
-    # Connect to Archon's Docker network so agent-zero can reach archon-mcp by container name
-    # without routing through the host port proxy (which is fragile on Docker Desktop).
-    # The default agentz_default network is kept automatically by compose; archon_app-network
-    # is the external network created by the Archon stack.
-    networks:
-      - default
-      - archon_app-network
+    # Agent Zero always starts on the default compose network.
+    # Optional external networks such as archon_app-network are attached at startup time
+    # by scripts/setup/startup.sh when they exist, so core startup does not depend on them.
     restart: unless-stopped
+    # Writable runtime scratch paths stay off the image filesystem. Full read_only
+    # rootfs is deferred because initialize.sh, cert generation, and root-run
+    # supervisor services still write to additional system paths during startup.
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777
+      - /run:rw,nosuid,nodev,mode=0755
+      - /var/run:rw,nosuid,nodev,mode=0755
+      - /var/log:rw,nosuid,nodev,mode=0755
     # Shared memory for Chromium/Playwright (default 64MB is small; larger shm improves browser responsiveness)
     shm_size: '512mb'
     # Total memory+swap = 16G (same as memory limit) so container cannot use extra swap — predictable response under memory pressure
@@ -134,14 +144,6 @@ services:
     networks:
       - default
     restart: unless-stopped
-
-# External networks: archon_app-network is managed by the Archon docker-compose stack.
-# It must be running (docker compose up) before agent-zero starts, or agent-zero will
-# fail to join the network. If Archon is not deployed, comment out the networks block
-# and the networks entry under agent-zero.
-networks:
-  archon_app-network:
-    external: true
 
 volumes:
   ollama_data: {}

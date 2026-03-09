@@ -138,6 +138,90 @@ if degraded:
 PY
 }
 
+print_runtime_state_status() {
+    local body="$1"
+
+    if [[ -z "$body" ]]; then
+        echo "  Runtime:    unavailable"
+        return
+    fi
+
+    RUNTIME_STATE_ENV="$body" python3 - <<'PY'
+import json
+import os
+
+try:
+    payload = json.loads(os.environ.get("RUNTIME_STATE_ENV", ""))
+except Exception:
+    print("  Runtime:    unavailable")
+    raise SystemExit(0)
+
+paths = payload.get("paths", {})
+seed = payload.get("seed", {})
+env = payload.get("env", {})
+runtime = payload.get("runtime", {})
+models = payload.get("models", {})
+mcp = payload.get("mcp", {})
+drift = payload.get("drift", {})
+
+live_path = paths.get("effective_settings_path", "(unknown)")
+seed_path = paths.get("repo_seed_settings_path", "(unknown)")
+seed_source = seed.get("source", "default_settings")
+override_count = env.get("override_count", 0)
+override_suffix = ""
+if override_count:
+    override_suffix = f" ({override_count} override key(s))"
+
+print(f"  Runtime:    live={live_path}")
+print(f"  Seed:       {seed_source} @ {seed_path}")
+print(
+    "  Env:        root={root_present} usr={user_present}{suffix}".format(
+        root_present="yes" if env.get("root_env_present") else "no",
+        user_present="yes" if env.get("user_env_present") else "no",
+        suffix=override_suffix,
+    )
+)
+print(
+    "  Derived:    {fields}".format(
+        fields=", ".join(runtime.get("runtime_derived_fields", [])) or "(none)"
+    )
+)
+
+live_models = models.get("live", {})
+seed_models = models.get("seed", {})
+print(
+    "  Models:     live chat={chat} | util={utility} | browser={browser}".format(
+        chat=live_models.get("chat", "(unset)"),
+        utility=live_models.get("utility", "(unset)"),
+        browser=live_models.get("browser", "(unset)"),
+    )
+)
+if models.get("drift_fields"):
+    print(
+        "  Model drift: fields={fields}".format(
+            fields=", ".join(models.get("drift_fields", []))
+        )
+    )
+    print(
+        "  Model seed:  chat={chat} | util={utility} | browser={browser}".format(
+            chat=seed_models.get("chat", "(unset)"),
+            utility=seed_models.get("utility", "(unset)"),
+            browser=seed_models.get("browser", "(unset)"),
+        )
+    )
+
+live_servers = ", ".join(mcp.get("live_server_names", [])) or "(none)"
+seed_servers = ", ".join(mcp.get("seed_server_names", [])) or "(none)"
+print(f"  MCP:        live={live_servers}")
+if mcp.get("drift_fields"):
+    print("  MCP drift:  fields={fields}".format(fields=", ".join(mcp.get("drift_fields", []))))
+    print(f"  MCP seed:   {seed_servers}")
+
+for warning in drift.get("warnings", []):
+    print(f"  Warning:    {warning}")
+PY
+}
+
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
 echo -e "${CYAN}Agent Zero – Status${NC}"
@@ -194,6 +278,12 @@ if [[ -n "$SETTINGS_JSON" ]]; then
 else
     echo "  (could not read /a0/usr/settings.json from container)"
 fi
+echo ""
+
+# Runtime truth and drift warnings from the live container.
+echo -e "  ${CYAN}Runtime State:${NC}"
+RUNTIME_STATE_JSON=$(docker exec "$CONTAINER_NAME" /bin/sh -lc 'PYTHONPATH=/a0 /opt/venv-a0/bin/python -c "import json, sys; sys.argv.append(\"--dockerized=true\"); from python.helpers import runtime; runtime.initialize(); from python.helpers.runtime_state_report import build_runtime_state_report; print(json.dumps(build_runtime_state_report()))"' 2>/dev/null || true)
+print_runtime_state_status "$RUNTIME_STATE_JSON"
 echo ""
 
 # Access

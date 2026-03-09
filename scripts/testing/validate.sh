@@ -17,6 +17,7 @@ SKIPPED=0
 CONTAINER_OK=0
 LIVENESS_OK=0
 READINESS_OK=0
+RELIABILITY_OK=0
 SUPERVISOR_OK=0
 VNC_OK=0
 CLAUDE_OK=0
@@ -144,6 +145,18 @@ PY
     if [ -n "$BLOCKING" ]; then
         echo "   Blocking phases: $BLOCKING"
     fi
+    ((FAILED++))
+fi
+echo ""
+
+# Phase 3b: Reliability
+echo -e "${BLUE}[Phase 3b] Reliability${NC}"
+if ./scripts/testing/validate_reliability.sh; then
+    echo -e "${GREEN}✅ Reliability validation passed${NC}"
+    RELIABILITY_OK=1
+    ((PASSED++))
+else
+    echo -e "${RED}❌ Reliability validation failed${NC}"
     ((FAILED++))
 fi
 echo ""
@@ -280,6 +293,7 @@ echo "|----------------------|-----------|"
 printf "| %-20s | %-10s |\n" "1. Container" "$([ $CONTAINER_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
 printf "| %-20s | %-10s |\n" "2. Liveness" "$([ $LIVENESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
 printf "| %-20s | %-10s |\n" "3. Readiness" "$([ $READINESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
+printf "| %-20s | %-10s |\n" "3b. Reliability" "$([ $RELIABILITY_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
 printf "| %-20s | %-10s |\n" "4. Supervisor" "$([ $SUPERVISOR_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
 printf "| %-20s | %-10s |\n" "5. VNC" "$([ $VNC_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"
 printf "| %-20s | %-10s |\n" "6. Claude Code" "$([ $CLAUDE_OK -eq 1 ] && [ $WRAPPER_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")"

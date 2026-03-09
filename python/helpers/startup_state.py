@@ -49,15 +49,15 @@ class StartupState:
         with self._lock:
             return {
                 name: phase.to_dict()
-                for name, phase in sorted(self._phases.items(), key=lambda item: item[0])
+                for name, phase in sorted(
+                    self._phases.items(), key=lambda item: item[0]
+                )
             }
 
     def ready(self) -> tuple[bool, dict[str, dict[str, Any]]]:
         phases = self.snapshot()
         is_ready = all(
-            phase["status"] == "ready"
-            for phase in phases.values()
-            if phase["required"]
+            phase["status"] == "ready" for phase in phases.values() if phase["required"]
         )
         return is_ready, phases
 
@@ -73,7 +73,9 @@ class StartupState:
         with self._lock:
             phase = self._phases.get(name)
             if phase is None:
-                phase = StartupPhase(required=required if required is not None else False)
+                phase = StartupPhase(
+                    required=required if required is not None else False
+                )
                 self._phases[name] = phase
 
             if required is not None:

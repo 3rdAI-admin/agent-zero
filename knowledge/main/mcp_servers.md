@@ -100,7 +100,7 @@ Example Agent Zero user setting when all three local MCP servers are enabled:
 
 ## Network Requirements
 
-- **archon-mcp**: Requires agent-zero container to join `archon_app-network` (configured in docker-compose.yml)
+- **archon-mcp**: Uses optional external Docker network `archon_app-network`; `scripts/setup/startup.sh` attaches agent-zero when that network exists
 - **workspace_mcp**: Same Docker Compose default network; service name `workspace_mcp`, port 8889
 - **crawl4ai_rag**: Accessible via standard Docker networking or localhost
 

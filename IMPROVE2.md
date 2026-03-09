@@ -65,7 +65,7 @@ Use this file when Archon is unreachable, timing out, or unavailable before task
   - Sync status: synced_to_archon
 
 ### Utility model downsizing
-- Status: in_progress
+- Status: done_local
 - Date: 2026-03-08 13:05 -07:00
 - Area: models
 - Summary: Utility model was switched from `gpt-oss:20b` to `gemma3:1b` in the volume-backed runtime settings to reduce background latency and memory-consolidation timeouts.
@@ -85,7 +85,7 @@ Use this file when Archon is unreachable, timing out, or unavailable before task
   - Project: AgentZ / A0 SIP
   - Task ID: `654d201c-0ef2-4f55-93e4-e0b1d3cdb0f0`
   - Assignee: Claude
-  - Sync status: partially_synced_structural_followup
+  - Sync status: synced_to_archon
 
 ### Runtime settings source of truth
 - Status: synced_to_archon
@@ -157,7 +157,7 @@ Use this file when Archon is unreachable, timing out, or unavailable before task
   - Sync status: synced_to_archon
 
 ### Tool execution flow hardening
-- Status: in_progress
+- Status: done_local
 - Date: 2026-03-08 13:20 -07:00
 - Area: runtime
 - Summary: The agent still wastes turns on malformed generated Python and awkward terminal/code-execution flows even when the container is healthy.
@@ -177,7 +177,7 @@ Use this file when Archon is unreachable, timing out, or unavailable before task
   - Project: AgentZ / A0 SIP
   - Task ID: `0b77b48c-0180-4bfb-9430-bfb9fbfc9034`
   - Assignee: Claude
-  - Sync status: partially_synced
+  - Sync status: synced_to_archon
 
 ### End-to-end latency instrumentation
 - Status: synced_to_archon

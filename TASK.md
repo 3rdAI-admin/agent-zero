@@ -2,6 +2,26 @@
 
 ## Completed
 
+### 2026-03-09: Phase 2c Docker container hardening
+- **Archon task:** `649c498a-3266-4a81-b7b7-7d98d0cb8e81` (review)
+- **Fix:** Hardened the main `agent-zero` container in `docker-compose.yml` with `cap_drop: [ALL]`, a reduced capability allowlist (`CHOWN`, `NET_RAW`, `NET_BIND_SERVICE`, `SETUID`, `SETGID`), `security_opt: [no-new-privileges:true]`, and tmpfs-backed runtime directories for `/tmp`, `/run`, `/var/run`, and `/var/log`. Updated `docker/run/fs/exe/initialize.sh` to recreate required runtime directories on boot and added `docs/developer/CONTAINER_HARDENING.md` to document the new baseline plus the intentionally deferred `read_only` and non-root migration work. Verified with `docker inspect`, `/health`, `/ready`, `./scripts/testing/validate_reliability.sh`, and `./scripts/testing/validate.sh` after a full rebuild/recreate.
+
+### 2026-03-09: Reliability validation suite for runtime truth, readiness, and failure semantics
+- **Archon task:** `28a8029d-78ea-41be-8e0b-0d63a078e3ce` (review)
+- **Fix:** Added `tests/test_reliability_runtime_validation.py` and `scripts/testing/validate_reliability.sh` to validate settings path truth, preload mode contract, MCP dispatch correction behavior, code-execution guardrails, timeout semantics, readiness transitions, live runtime token/path checks, and app-venv Google client parity. Integrated the new reliability phase into both `scripts/testing/validate.sh` and `scripts/testing/validate_thorough.sh`, updated `.cursor/prompts/validate-project.md`, and fixed the thorough validator’s MCP SSE probe so it uses a bounded timeout instead of hanging. Verified: `validate_reliability.sh` passed, `validate.sh` passed, and `validate_thorough.sh` passed with zero warnings.
+
+### 2026-03-08: B6 dependency startup orchestration cleanup
+- **Archon task:** `85a9b51e-6d97-44f1-bdc0-e1eab36c9d0b` (review)
+- **Fix:** Reworked startup orchestration so core `agent-zero` startup no longer depends on the external `archon_app-network` being present in `docker-compose.yml`. `startup.sh` now best-effort attaches that network after container start, warns when optional `ollama` or `workspace_mcp` services are unavailable, and continues on core liveness/readiness checks. Added `docs/developer/STARTUP_DEPENDENCIES.md` documenting required vs optional vs selected-only dependencies and updated MCP network guidance accordingly. Verified by running `./startup.sh` while `ollama` was stopped: Agent Zero reached healthy and ready state with only a warning.
+
+### 2026-03-08: B1 runtime state visibility and drift warnings
+- **Archon task:** `0ff64cff-ba01-4a5b-92c0-3185151477e8` (review)
+- **Fix:** Added `python/helpers/runtime_state_report.py` to compare the effective live runtime state against repo seed/default assumptions without treating runtime-derived fields as file-backed truth. Updated `scripts/show_status.sh` to print live settings path, repo seed path, env-layer presence, runtime-derived fields, model drift, MCP drift, and warnings directly from the running container. Added focused tests covering repo-seed comparisons, env override detection, MCP drift detection, and default fallback behavior.
+
+### 2026-03-08: Fix misleading login route when auth is disabled
+- **Archon task:** `5042a84e-5c06-42e5-8e00-d68555443518` (review)
+- **Fix:** Updated `run_ui.py` so `/login` and `/logout` redirect back to `/` whenever authentication is not configured, preventing users from getting stuck on a dead-end login form. Added regression tests covering disabled-auth redirects and the still-enabled login page path.
+
 ### 2026-03-08: B3/B4 startup state model and readiness separation
 - **Archon task:** `8b992247-f4c8-44a4-8707-8ed1cb9c0161` (review)
 - **Fix:** Added `python/helpers/startup_state.py` and a `/ready` endpoint so startup readiness is tracked separately from `/health` liveness. Updated `startup.sh`, `restart.sh`, `show_status.sh`, and both validation scripts to surface readiness explicitly, support both HTTP and HTTPS probe paths, and report degraded optional phases without turning Docker health into a startup gate.

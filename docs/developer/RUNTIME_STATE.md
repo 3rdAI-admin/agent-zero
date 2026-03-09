@@ -69,6 +69,11 @@ Scripts and tests should not:
 ## Operational guidance
 
 - For live status, prefer runtime APIs/helpers or container reads of `/a0/usr/settings.json`.
+- `scripts/show_status.sh` now reports runtime truth and drift warnings from the live container, including:
+  - live settings path versus repo seed path
+  - model assignment drift
+  - MCP config drift
+  - runtime-derived fields that should not be treated as file-backed truth
 - For MCP token checks, use runtime-derived helpers instead of JSON scraping.
 - When debugging drift, compare:
   - effective `usr/settings.json`

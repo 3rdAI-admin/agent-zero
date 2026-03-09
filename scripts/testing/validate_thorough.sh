@@ -16,6 +16,7 @@ PASSED=0
 FAILED=0
 SKIPPED=0
 WARNINGS=0
+RELIABILITY_OK=0
 
 LAST_CONTAINER_SCHEME="http"
 
@@ -142,6 +143,18 @@ PY
 fi
 echo ""
 
+# Phase 2b: Reliability
+echo -e "${BLUE}=== Phase 2b: Reliability ===${NC}"
+if ./scripts/testing/validate_reliability.sh; then
+    echo -e "${GREEN}✅ Reliability validation passed${NC}"
+    RELIABILITY_OK=1
+    ((PASSED++))
+else
+    echo -e "${RED}❌ Reliability validation failed${NC}"
+    ((FAILED++))
+fi
+echo ""
+
 # Phase 3: Container Health
 echo -e "${BLUE}=== Phase 3: Container Health ===${NC}"
 if docker ps --filter name=agent-zero --format "{{.Names}}" 2>/dev/null | grep -q "^agent-zero$"; then
@@ -243,8 +256,8 @@ if [ -n "$TOKEN" ] && [ "$TOKEN" != "" ]; then
     MCP_TOKEN=1
     ((PASSED++))
     
-    STATUS=$(docker exec agent-zero curl -s -o /dev/null -w '%{http_code}' http://localhost:80/mcp/t-${TOKEN}/sse 2>&1 || echo "000")
-    if [ "$STATUS" = "200" ] || [ "$STATUS" = "000" ]; then
+    STATUS=$(docker exec agent-zero curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost:80/mcp/t-${TOKEN}/sse 2>&1 || echo "000")
+    if [[ "$STATUS" == "200"* ]] || [ "$STATUS" = "000" ]; then
         echo -e "${GREEN}✅ MCP endpoint accessible${NC}"
         MCP_ENDPOINT=1
         ((PASSED++))
@@ -379,6 +392,7 @@ printf "| %-25s | %-10s | %-30s |\n" "Phase" "Status" "Notes"
 echo "|---------------------------|------------|------------------------------|"
 printf "| %-25s | %-10s | %-30s |\n" "1. Service Health" "$([ $CONTAINER_RUNNING -eq 1 ] && [ $LIVENESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Container: $([ $CONTAINER_RUNNING -eq 1 ] && echo "running" || echo "stopped")"
 printf "| %-25s | %-10s | %-30s |\n" "2. Readiness" "$([ $READINESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Endpoint: /ready"
+printf "| %-25s | %-10s | %-30s |\n" "2b. Reliability" "$([ $RELIABILITY_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Runtime truth + guards"
 printf "| %-25s | %-10s | %-30s |\n" "3. Container Health" "$([ $CONTAINER_RUNNING -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Status checked"
 printf "| %-25s | %-10s | %-30s |\n" "4. Supervisor Services" "$(
 if [ $RUNNING_COUNT -eq $TOTAL ]; then

@@ -121,3 +121,39 @@ def test_http_csrf_accepts_valid_cookie(monkeypatch) -> None:
     _set_csrf_cookie(client, "csrf-4")
     response = client.get("/secure")
     assert response.status_code == 200
+
+
+def test_login_redirects_to_root_when_auth_disabled(monkeypatch) -> None:
+    import run_ui
+
+    monkeypatch.setattr(run_ui.login, "is_login_required", lambda: False)
+
+    client = run_ui.webapp.test_client()
+    response = client.get("/login", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
+def test_logout_redirects_to_root_when_auth_disabled(monkeypatch) -> None:
+    import run_ui
+
+    monkeypatch.setattr(run_ui.login, "is_login_required", lambda: False)
+
+    client = run_ui.webapp.test_client()
+    response = client.get("/logout", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
+def test_login_page_still_renders_when_auth_enabled(monkeypatch) -> None:
+    import run_ui
+
+    monkeypatch.setattr(run_ui.login, "is_login_required", lambda: True)
+
+    client = run_ui.webapp.test_client()
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert b"login-form" in response.data
