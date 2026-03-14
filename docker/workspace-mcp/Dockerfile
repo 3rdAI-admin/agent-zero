@@ -1,6 +1,6 @@
 # Google Workspace MCP server (Gmail, Drive, Docs, Sheets, Calendar, etc.) in streamable-HTTP mode.
-# Runs as non-root user 'mcp'. Credentials mount at /home/mcp/.google_workspace_mcp (see README).
-# First-time OAuth: run host script once, then copy into workspace-mcp-credentials on host.
+# Agent Zero can connect at http://workspace_mcp:8889/mcp when both run in the same Docker Compose stack.
+# First-time OAuth: run the host script once, then copy ~/.google_workspace_mcp to ./workspace-mcp-credentials (see README).
 
 FROM python:3.12-slim
 
@@ -9,16 +9,8 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install --no-cache-dir workspace-mcp
 
-# Run as non-root: credentials and process isolation.
-RUN adduser --disabled-password --gecos "" --uid 1000 mcp \
-    && mkdir -p /home/mcp/.google_workspace_mcp \
-    && chown -R mcp:mcp /home/mcp/.google_workspace_mcp
-
-ENV HOME=/home/mcp
-USER mcp
-WORKDIR /home/mcp
-
 EXPOSE 8889
 
-# Mount host credentials at /home/mcp/.google_workspace_mcp. Set GOOGLE_OAUTH_CLIENT_ID/SECRET via env.
+# Credentials live in /root/.google_workspace_mcp; mount host dir at that path.
+# Env GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must be set (e.g. from .env).
 CMD ["workspace-mcp", "--transport", "streamable-http"]

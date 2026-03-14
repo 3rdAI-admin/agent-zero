@@ -6,7 +6,7 @@ Supports: nikto, nuclei, whatweb, httpx
 
 import subprocess
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 
 from python.helpers.tool_installer import ToolInstaller
@@ -313,7 +313,7 @@ class WebScanner:
     @classmethod
     def httpx_probe(
         cls, targets: List[str], ports: Optional[List[int]] = None, timeout: int = 120
-    ) -> Tuple[bool, List[Dict[str, Any]], str]:
+    ) -> Tuple[bool, List[Dict], str]:
         """
         Probe HTTP services using httpx.
 
@@ -359,7 +359,7 @@ class WebScanner:
             )
 
             # Parse JSON output
-            results: List[Dict[str, Any]] = []
+            results = []
             for line in result.stdout.strip().split("\n"):
                 if not line:
                     continue
@@ -397,12 +397,7 @@ class WebScanner:
         Returns:
             Tuple of (success, combined results, summary)
         """
-        results: Dict[str, Any] = {
-            "target": target,
-            "technologies": [],
-            "findings": [],
-            "errors": [],
-        }
+        results = {"target": target, "technologies": [], "findings": [], "errors": []}
 
         # Run whatweb for tech fingerprinting
         cls._printer.print("[WebScanner] Phase 1: Technology fingerprinting")
@@ -433,7 +428,7 @@ class WebScanner:
         summary += f"- Findings: {len(results['findings'])}\n"
 
         if results["findings"]:
-            severity_counts: Dict[str, int] = {}
+            severity_counts = {}
             for f in results["findings"]:
                 sev = f["severity"]
                 severity_counts[sev] = severity_counts.get(sev, 0) + 1

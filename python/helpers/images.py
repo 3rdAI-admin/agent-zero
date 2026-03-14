@@ -17,7 +17,7 @@ def compress_image(
         Compressed image as bytes
     """
     # load image from bytes
-    img: Image.Image = Image.open(io.BytesIO(image_data))
+    img = Image.open(io.BytesIO(image_data))
 
     # calculate scaling factor to get to max_pixels
     current_pixels = img.width * img.height

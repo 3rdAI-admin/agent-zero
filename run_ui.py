@@ -38,19 +38,6 @@ import logging
 logging.getLogger().setLevel(logging.WARNING)
 
 
-class _HealthCheckAccessLogFilter(logging.Filter):
-    """Suppress access log lines for GET /health 200 to reduce log noise from Docker healthcheck."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            msg = record.getMessage()
-        except Exception:
-            return True
-        if " /health " in msg and " 200 " in msg:
-            return False
-        return True
-
-
 # Set the new timezone to 'UTC'
 os.environ["TZ"] = "UTC"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -556,10 +543,6 @@ def run():
             self._server.should_exit = True
 
     process.set_server(_UvicornServerWrapper(server))
-
-    # Suppress GET /health 200 from access log when enabled (Docker healthcheck every 30s)
-    if _settings.get("uvicorn_access_logs_enabled", False):
-        logging.getLogger("uvicorn.access").addFilter(_HealthCheckAccessLogFilter())
 
     PrintStyle().debug(f"Starting server at {scheme}://{host}:{port} ...")
     threading.Thread(target=wait_for_health, args=(host, port, scheme), daemon=True).start()

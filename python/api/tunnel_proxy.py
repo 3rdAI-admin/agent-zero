@@ -1,6 +1,6 @@
 from python.helpers.api import ApiHandler, Request, Response
 from python.helpers import dotenv, runtime
-import requests  # type: ignore[import-untyped]
+import requests
 
 
 class TunnelProxy(ApiHandler):

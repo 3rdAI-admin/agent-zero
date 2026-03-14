@@ -1,5 +1,4 @@
 import base64
-from typing import Any
 from python.helpers.print_style import PrintStyle
 from python.helpers.tool import Tool, Response
 from python.helpers import runtime, files, images
@@ -13,8 +12,8 @@ TOKENS_ESTIMATE = 1500
 
 
 class VisionLoad(Tool):
-    async def execute(self, paths: list[str] = [], **kwargs) -> Response:  # noqa: B006
-        self.images_dict: dict[str, str | None] = {}
+    async def execute(self, paths: list[str] = [], **kwargs) -> Response:
+        self.images_dict = {}
 
         for path in paths:
             if not await runtime.call_development_function(files.exists, str(path)):
@@ -54,7 +53,7 @@ class VisionLoad(Tool):
 
     async def after_execution(self, response: Response, **kwargs):
         # build image data messages for LLMs, or error message
-        content: list[dict[str, Any]] = []
+        content = []
         if self.images_dict:
             for path, image in self.images_dict.items():
                 if image:

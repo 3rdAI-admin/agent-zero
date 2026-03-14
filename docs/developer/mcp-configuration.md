@@ -148,10 +148,6 @@ For existing `settings.json` files without MCP support:
 **Streaming HTTP Variants:**
 Type can be: `"http-stream"`, `"streaming-http"`, `"streamable-http"`, or `"http-streaming"`
 
-### Google Workspace MCP (Gmail, Drive, Docs, Sheets, Calendar, etc.)
-
-For full Google Workspace integration (Gmail, Drive, Docs, Sheets, Slides, Calendar, Tasks), use the [Google Workspace MCP](https://workspacemcp.com/) server. See the [MCP Setup guide → Google Workspace MCP](../guides/mcp-setup.md#google-workspace-mcp-full-workspace) for stdio and remote HTTP configuration, OAuth env vars, and tool tiers.
-
 ### Example in settings.json
 
 ```json

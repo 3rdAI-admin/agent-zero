@@ -1,7 +1,7 @@
 import { createStore } from "/js/AlpineStore.js";
 import { updateChatInput, sendMessage } from "/index.js";
 import { sleep } from "/js/sleep.js";
-import { store as microphoneSettingStore, isSecureContextForMicrophone, MICROPHONE_INSECURE_MESSAGE } from "/components/settings/speech/microphone-setting-store.js";
+import { store as microphoneSettingStore } from "/components/settings/speech/microphone-setting-store.js";
 import * as shortcuts from "/js/shortcuts.js";
 
 const Status = {
@@ -689,10 +689,6 @@ class MicrophoneInput {
     // Set status to activating at the start of initialization
     this.status = Status.ACTIVATING;
     try {
-      if (!isSecureContextForMicrophone()) {
-        toast(MICROPHONE_INSECURE_MESSAGE, "error");
-        return false;
-      }
       // get selected device from microphone settings
       const selectedDevice = microphoneSettingStore.getSelectedDevice();
 
@@ -728,10 +724,7 @@ class MicrophoneInput {
       return true;
     } catch (error) {
       console.error("Microphone initialization error:", error);
-      const message = !isSecureContextForMicrophone()
-        ? MICROPHONE_INSECURE_MESSAGE
-        : "Failed to access microphone. Please check permissions.";
-      toast(message, "error");
+      toast("Failed to access microphone. Please check permissions.", "error");
       return false;
     }
   }
@@ -945,21 +938,15 @@ class MicrophoneInput {
 
   // Request microphone permission
   async requestPermission() {
-    if (!isSecureContextForMicrophone()) {
-      toast(MICROPHONE_INSECURE_MESSAGE, "error");
-      return false;
-    }
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       return true;
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      const name = err?.name || "";
-      const msg =
-        name === "NotAllowedError"
-          ? "Microphone blocked. Allow microphone when the browser prompts, or click the lock/info icon in the address bar and set Microphone to Allow."
-          : "Microphone access denied. Check the site permissions (lock icon in the address bar) or try again and choose Allow when prompted.";
-      toast(msg, "error");
+      toast(
+        "Microphone access denied. Please enable microphone access in your browser settings.",
+        "error"
+      );
       return false;
     }
   }

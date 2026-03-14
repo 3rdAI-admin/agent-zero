@@ -7,7 +7,7 @@ from python.helpers import dirty_json, errors, settings, log
 
 DATA_NAME_TASK = "_recall_memories_task"
 DATA_NAME_ITER = "_recall_memories_iter"
-SEARCH_TIMEOUT = 60
+SEARCH_TIMEOUT = 30
 
 
 class RecallMemories(Extension):

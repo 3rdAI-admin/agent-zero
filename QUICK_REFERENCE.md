@@ -26,7 +26,7 @@
 
 ### Google Workspace MCP (container)
 - **Service:** `workspace_mcp` — Gmail, Drive, Docs, Sheets, Calendar. URL: `http://workspace_mcp:8889/mcp`, type: `streamable-http`.
-- **First-time:** Run `./scripts/setup/run_workspace_mcp.sh` on host once for OAuth, then `cp -r ~/.google_workspace_mcp/* workspace-mcp-credentials/` and `docker compose up -d`. See [docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md](docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md). **Remote / single vs multi-cred:** [docs/setup/QUICKSETUP.md](docs/setup/QUICKSETUP.md).
+- **First-time:** Run `./scripts/setup/run_workspace_mcp.sh` on host once for OAuth, then `cp -r ~/.google_workspace_mcp/* workspace-mcp-credentials/` and `docker compose up -d`. See [docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md](docs/setup/GOOGLE_WORKSPACE_MCP_CONTAINER.md).
 
 ### Health
 - **`GET /health`** - No-auth health check (200 OK). Used by Docker healthcheck and `restart.sh`; avoids 302s from unauthenticated curl.

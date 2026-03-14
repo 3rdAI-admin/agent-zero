@@ -1,5 +1,5 @@
 import asyncio
-import paramiko  # type: ignore[import-untyped]
+import paramiko
 import time
 import re
 from typing import Tuple
@@ -26,8 +26,8 @@ class SSHInteractiveSession:
         self.port = port
         self.username = username
         self.password = password
-        self.client = paramiko.SSHClient()  # type: ignore[attr-defined]
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # type: ignore[attr-defined]
+        self.client = paramiko.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.shell = None
         self.full_output = b""
         self.last_command = b""
@@ -71,7 +71,7 @@ class SSHInteractiveSession:
                 initial_command = "unset PROMPT_COMMAND PS0; stty -echo"
                 if self.cwd:
                     initial_command = f"cd {self.cwd}; {initial_command}"
-                self.shell.send(f"{initial_command}\n".encode())  # type: ignore[union-attr, attr-defined]
+                self.shell.send(f"{initial_command}\n".encode())
 
                 # wait for initial prompt/output to settle
                 while True:

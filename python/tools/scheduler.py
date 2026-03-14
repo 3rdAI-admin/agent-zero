@@ -77,18 +77,17 @@ class SchedulerTool(Tool):
                 continue
             if type_filter and task.type not in type_filter:
                 continue
-            next_run_mins = task.get_next_run_minutes()
             if (
                 next_run_within_filter
-                and next_run_mins is not None
-                and next_run_mins > next_run_within_filter
-            ):
+                and task.get_next_run_minutes() is not None
+                and task.get_next_run_minutes() > next_run_within_filter
+            ):  # type: ignore
                 continue
             if (
                 next_run_after_filter
-                and next_run_mins is not None
-                and next_run_mins < next_run_after_filter
-            ):
+                and task.get_next_run_minutes() is not None
+                and task.get_next_run_minutes() < next_run_after_filter
+            ):  # type: ignore
                 continue
             filtered_tasks.append(serialize_task(task))
 

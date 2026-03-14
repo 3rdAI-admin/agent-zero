@@ -65,24 +65,10 @@ function resetButton(button, state) {
   }
 }
 
-// Register Alpine magic helper.
-// Uses alpine:init event so the magic is available before Alpine processes
-// components, avoiding a race where queueMicrotask(start) fires before the
-// caller can invoke registerAlpineMagic().
+// Register Alpine magic helper
 export function registerAlpineMagic() {
-  const register = () => Alpine.magic('confirmClick', () => confirmClick);
-
   if (globalThis.Alpine) {
-    // Alpine already loaded — register immediately (works for late-init components)
-    register();
+    Alpine.magic('confirmClick', () => confirmClick);
   }
-
-  // Also hook the alpine:init event which fires *during* Alpine.start() but
-  // before any component is initialized — guarantees the magic is present.
-  document.addEventListener('alpine:init', () => {
-    if (globalThis.Alpine) {
-      register();
-    }
-  });
 }
 

@@ -15,7 +15,7 @@ _cache: dict[str, list[type["Extension"]]] = {}
 
 class Extension:
     def __init__(self, agent: "Agent|None", **kwargs):
-        self.agent: "Agent" = agent  # type: ignore[assignment]  # there are currently no extensions without an agent
+        self.agent: "Agent" = agent  # type: ignore < here we ignore the type check as there are currently no extensions without an agent
         self.kwargs = kwargs
 
     @abstractmethod
@@ -61,7 +61,7 @@ def _get_extensions(folder: str):
     else:
         if not files.exists(folder):
             return []
-        classes = extract_tools.load_classes_from_folder(folder, "*", Extension)  # type: ignore[type-abstract]
+        classes = extract_tools.load_classes_from_folder(folder, "*", Extension)
         _cache[folder] = classes
 
     return classes

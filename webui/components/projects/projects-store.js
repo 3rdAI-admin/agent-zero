@@ -17,8 +17,6 @@ const model = {
   projectList: [],
   selectedProject: null,
   editData: null,
-  /** In-flight promise for loadProjectsList to avoid duplicate POST /projects on page load */
-  _loadProjectsListPromise: null,
   colors: [
     "#7b2cbf", // Deep Purple
     "#8338ec", // Blue Violet
@@ -334,25 +332,17 @@ const model = {
   },
 
   async loadProjectsList() {
-    if (this._loadProjectsListPromise) {
-      return this._loadProjectsListPromise;
+    this.loading = true;
+    try {
+      const response = await api.callJsonApi("projects", {
+        action: "list",
+      });
+      this.projectList = response.data || [];
+    } catch (error) {
+      console.error("Error loading projects list:", error);
+    } finally {
+      this.loading = false;
     }
-    const promise = (async () => {
-      this.loading = true;
-      try {
-        const response = await api.callJsonApi("projects", {
-          action: "list",
-        });
-        this.projectList = response.data || [];
-      } catch (error) {
-        console.error("Error loading projects list:", error);
-      } finally {
-        this.loading = false;
-        this._loadProjectsListPromise = null;
-      }
-    })();
-    this._loadProjectsListPromise = promise;
-    return promise;
   },
 
   async saveSelectedProject(creating) {

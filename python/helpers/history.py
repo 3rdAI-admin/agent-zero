@@ -122,7 +122,7 @@ class Message(Record):
     @staticmethod
     def from_dict(data: dict, history: "History"):
         content = data.get("content", "Content lost")
-        msg = Message(ai=data["ai"], content=content)  # type: ignore[abstract]
+        msg = Message(ai=data["ai"], content=content)
         msg.summary = data.get("summary", "")
         msg.tokens = data.get("tokens", 0)
         return msg
@@ -143,7 +143,7 @@ class Topic(Record):
     def add_message(
         self, ai: bool, content: MessageContent, tokens: int = 0
     ) -> Message:
-        msg = Message(ai=ai, content=content, tokens=tokens)  # type: ignore[abstract]
+        msg = Message(ai=ai, content=content, tokens=tokens)
         self.messages.append(msg)
         return msg
 
@@ -190,8 +190,8 @@ class Topic(Record):
                 trunc = messages.truncate_dict_by_ratio(
                     self.history.agent,
                     out[0]["content"],
-                    int(trim_to_chars * 1.15),
-                    int(trim_to_chars * 0.85),
+                    trim_to_chars * 1.15,
+                    trim_to_chars * 0.85,
                 )
                 msg.set_summary(_json_dumps(trunc))
 
@@ -218,7 +218,7 @@ class Topic(Record):
         sum_msg_content = self.history.agent.parse_prompt(
             "fw.msg_summary.md", summary=summary
         )
-        sum_msg = Message(False, sum_msg_content)  # type: ignore[abstract]
+        sum_msg = Message(False, sum_msg_content)
         self.messages[1 : cnt_to_sum + 1] = [sum_msg]
         return True
 
@@ -475,7 +475,7 @@ class History(Record):
 
 
 def deserialize_history(json_data: str, agent) -> History:
-    history = History(agent=agent)  # type: ignore[abstract]
+    history = History(agent=agent)
     if json_data:
         data = _json_loads(json_data)
         history = History.from_dict(data, history=history)
@@ -522,7 +522,7 @@ def _output_content_langchain(content: MessageContent):
 
 
 def group_outputs_abab(outputs: list[OutputMessage]) -> list[OutputMessage]:
-    result: list[OutputMessage] = []
+    result = []
     for out in outputs:
         if result and result[-1]["ai"] == out["ai"]:
             result[-1] = OutputMessage(
@@ -535,12 +535,12 @@ def group_outputs_abab(outputs: list[OutputMessage]) -> list[OutputMessage]:
 
 
 def group_messages_abab(messages: list[BaseMessage]) -> list[BaseMessage]:
-    result: list[BaseMessage] = []
+    result = []
     for msg in messages:
         if result and isinstance(result[-1], type(msg)):
             # create new instance of the same type with merged content
             result[-1] = type(result[-1])(
-                content=_merge_outputs(result[-1].content, msg.content)  # type: ignore[arg-type]
+                content=_merge_outputs(result[-1].content, msg.content)
             )  # type: ignore
         else:
             result.append(msg)
@@ -548,7 +548,7 @@ def group_messages_abab(messages: list[BaseMessage]) -> list[BaseMessage]:
 
 
 def output_langchain(messages: list[OutputMessage]):
-    result: list[BaseMessage] = []
+    result = []
     for m in messages:
         content = _output_content_langchain(content=m["content"])
         if not content or (isinstance(content, str) and not content.strip()):

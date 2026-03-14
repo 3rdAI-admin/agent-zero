@@ -1,17 +1,5 @@
 import { createStore } from "/js/AlpineStore.js";
 
-/** Browsers allow getUserMedia only in secure contexts: HTTPS or localhost. */
-export function isSecureContextForMicrophone() {
-    if (typeof window === "undefined" || !window.location) return false;
-    const { protocol, hostname } = window.location;
-    if (protocol === "https:") return true;
-    if (protocol === "http:" && (hostname === "localhost" || hostname === "127.0.0.1")) return true;
-    return false;
-}
-
-export const MICROPHONE_INSECURE_MESSAGE =
-    "Microphone requires a secure connection. Use https:// for this server, or open the app at http://localhost:8888 (same machine).";
-
 const model = {
 
 
@@ -43,12 +31,6 @@ const model = {
     
     // request microphone permission and poll for devices
     async requestPermission() {
-        if (!isSecureContextForMicrophone()) {
-            if (typeof window !== "undefined" && window.toastFrontendError) {
-                window.toastFrontendError(MICROPHONE_INSECURE_MESSAGE, "Microphone unavailable");
-            }
-            return;
-        }
         // set flag first so UI can update immediately
         clearTimeout(this.permissionTimer);
         this.requestingPermission = true;
@@ -61,10 +43,7 @@ const model = {
                 // start polling for devices
                 this.pollForDevices();
             } catch (err) {
-                console.error("Microphone permission denied", err);
-                if (!isSecureContextForMicrophone() && window.toastFrontendError) {
-                    window.toastFrontendError(MICROPHONE_INSECURE_MESSAGE, "Microphone unavailable");
-                }
+                console.error("Microphone permission denied");
                 this.requestingPermission = false;
             }
         }, 0);
@@ -100,12 +79,7 @@ const model = {
             device = this.devices.find(d => d.deviceId === "default") || this.devices[0];
         }
         return device;
-    },
-
-    /** For UI: message to show when microphone is blocked (HTTP non-localhost). Null if secure. */
-    getInsecureContextMessage() {
-        return isSecureContextForMicrophone() ? null : MICROPHONE_INSECURE_MESSAGE;
-    },
+    }
 
 };
 

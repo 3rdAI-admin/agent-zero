@@ -9,7 +9,7 @@ This service runs the [Google Workspace MCP](https://workspacemcp.com/) server i
 
 ## First-time OAuth (container)
 
-The MCP server needs Google OAuth tokens. The container runs as non-root user `mcp` and reads credentials from `/home/mcp/.google_workspace_mcp`, which is bind-mounted from `./workspace-mcp-credentials` on the repo root. Restrict host permissions: `chmod 700 workspace-mcp-credentials` (see [SECURITY.md](SECURITY.md)).
+The MCP server needs Google OAuth tokens. The container reads credentials from `/root/.google_workspace_mcp`, which is bind-mounted from `./workspace-mcp-credentials` on the repo root.
 
 1. **One-time setup on the host** (so a browser can complete OAuth):
    - Ensure `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are in `.env` (from [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials, Desktop OAuth client).
@@ -34,18 +34,10 @@ The MCP server needs Google OAuth tokens. The container runs as non-root user `m
 
 Subsequent `docker compose up` will reuse the same credentials; re-copy only if you re-authenticate on the host or clear `workspace-mcp-credentials/`.
 
-## Multi-user (OAuth 2.1)
-
-The service runs with **OAuth 2.1 multi-user** enabled (`MCP_ENABLE_OAUTH21=true`). Multiple Google accounts can be used at once: each MCP client sends an `Authorization: Bearer <token>` header so the server can associate requests with a user and that user's credentials.
-
-- **Single account (no header):** You can still use one account by completing the legacy first-time OAuth flow above; some clients may work without a bearer token in default/legacy mode.
-- **Multiple accounts:** Each user obtains a bearer token (via the server’s OAuth 2.1 flow or your external IdP). In Agent Zero, add the server with a `headers` object containing the token, e.g. `"headers": { "Authorization": "Bearer <token>" }`. See [workspacemcp.com/docs](https://workspacemcp.com/docs) for token issuance and session storage options.
-
 ## Environment
 
 - `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` (from `.env`) are required for OAuth.
 - `WORKSPACE_MCP_PORT=8889` is set in the Dockerfile and compose; the service listens on 8889 inside the network.
-- `MCP_ENABLE_OAUTH21=true` enables OAuth 2.1 multi-user (bearer-token auth).
 
 ## Optional: expose port on the host
 
@@ -56,4 +48,4 @@ ports:
   - "8889:8889"
 ```
 
-Then you can use `http://localhost:8889/mcp` or `http://host.docker.internal:8889/mcp` from Agent Zero if you prefer. Restrict port 8889 with a firewall when exposing to the network; see [SECURITY.md](SECURITY.md).
+Then you can use `http://localhost:8889/mcp` or `http://host.docker.internal:8889/mcp` from Agent Zero if you prefer.

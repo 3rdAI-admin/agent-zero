@@ -61,6 +61,7 @@ turn_off_logging()
 browser_use_monkeypatch.apply()
 
 litellm.modify_params = True # helps fix anthropic tool calls by browser-use
+litellm.drop_params = True # drop unsupported params like frequency_penalty for anthropic
 
 class ModelType(Enum):
     CHAT = "Chat"
@@ -506,6 +507,16 @@ class LiteLLMChatWrapper(SimpleChatModel):
         call_kwargs: dict[str, Any] = {**self.kwargs, **kwargs}
         max_retries: int = int(call_kwargs.pop("a0_retry_attempts", 2))
         retry_delay_s: float = float(call_kwargs.pop("a0_retry_delay_seconds", 1.5))
+
+        # Anthropic doesn't allow both temperature and top_p - prefer temperature
+        # Also, Anthropic doesn't support frequency_penalty at all
+        if "anthropic" in self.model_name.lower():
+            if "temperature" in call_kwargs and "top_p" in call_kwargs:
+                call_kwargs.pop("top_p")
+            # Remove unsupported parameters
+            if "frequency_penalty" in call_kwargs:
+                call_kwargs.pop("frequency_penalty")
+
         stream = reasoning_callback is not None or response_callback is not None or tokens_callback is not None
 
         # results

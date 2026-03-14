@@ -120,10 +120,10 @@ def remove_msg_files(ctxid):
 def _serialize_context(context: AgentContext):
     # serialize agents
     agents = []
-    agent: Agent | None = context.agent0
+    agent = context.agent0
     while agent:
         agents.append(_serialize_agent(agent))
-        agent = agent.data.get(Agent.DATA_NAME_SUBORDINATE, None)  # type: ignore[assignment]
+        agent = agent.data.get(Agent.DATA_NAME_SUBORDINATE, None)
 
     data = {k: v for k, v in context.data.items() if not k.startswith("_")}
     output_data = {

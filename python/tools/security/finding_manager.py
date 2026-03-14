@@ -248,9 +248,9 @@ class FindingManager:
             pr = cls.CVSS_PR.get(privileges_required, 0.85)
 
         ui = cls.CVSS_UI.get(user_interaction, 0.85)
-        c = cls.CVSS_C.get(confidentiality, 0.0)
-        i = cls.CVSS_I.get(integrity, 0.0)
-        a = cls.CVSS_A.get(availability, 0.0)
+        c = cls.CVSS_C.get(confidentiality, 0)
+        i = cls.CVSS_I.get(integrity, 0)
+        a = cls.CVSS_A.get(availability, 0)
 
         # Calculate exploitability
         exploitability = 8.22 * av * ac * pr * ui
@@ -265,7 +265,7 @@ class FindingManager:
 
         # Calculate score
         if impact <= 0:
-            score = 0.0
+            score = 0
         elif scope_changed:
             score = min(1.08 * (impact + exploitability), 10)
         else:
@@ -325,7 +325,7 @@ class FindingManager:
 
     @classmethod
     def deduplicate_findings(
-        cls, findings: List[Finding], match_fields: Optional[List[str]] = None
+        cls, findings: List[Finding], match_fields: List[str] = None
     ) -> List[Finding]:
         """
         Deduplicate findings based on specified fields.
@@ -391,15 +391,9 @@ class FindingManager:
         Returns:
             Summary dictionary
         """
-        severity_counts: Dict[str, int] = {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0,
-            "info": 0,
-        }
-        cwe_counts: Dict[str, int] = {}
-        owasp_counts: Dict[str, int] = {}
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        cwe_counts = {}
+        owasp_counts = {}
 
         for finding in findings:
             # Count severities

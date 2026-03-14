@@ -96,7 +96,6 @@ services:
       start_period: 30s    # App often ready in 20–30s; /health makes healthy sooner
 
   # Google Workspace MCP (Gmail, Drive, Docs, Sheets, Calendar, etc.). Agent Zero connects at http://workspace_mcp:8889/mcp.
-  # OAuth 2.1 multi-user: set MCP_ENABLE_OAUTH21=true; clients pass Authorization: Bearer <token> in headers.
   # First-time OAuth: run ./scripts/setup/run_workspace_mcp.sh on the host once, then copy ~/.google_workspace_mcp to ./workspace-mcp-credentials.
   workspace_mcp:
     build:
@@ -108,9 +107,8 @@ services:
       - .env
     environment:
       - WORKSPACE_MCP_PORT=8889
-      - MCP_ENABLE_OAUTH21=true
     volumes:
-      - ./workspace-mcp-credentials:/home/mcp/.google_workspace_mcp
+      - ./workspace-mcp-credentials:/root/.google_workspace_mcp
     expose:
       - "8889"
     networks:

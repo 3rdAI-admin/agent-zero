@@ -1,14 +1,12 @@
 import asyncio
 from dataclasses import dataclass
 import shlex
-import shutil
 import time
 from python.helpers.tool import Tool, Response
 from python.helpers import files, rfc_exchange, projects, runtime, settings
 from python.helpers.print_style import PrintStyle
 from python.helpers.shell_local import LocalInteractiveSession
 from python.helpers.shell_ssh import SSHInteractiveSession
-from typing import Union
 from python.helpers.strings import truncate_text as truncate_text_string
 from python.helpers.messages import truncate_text as truncate_text_agent
 import re
@@ -33,7 +31,7 @@ OUTPUT_TIMEOUTS: dict[str, int] = {
 @dataclass
 class ShellWrap:
     id: int
-    session: Union[LocalInteractiveSession, SSHInteractiveSession]
+    session: LocalInteractiveSession | SSHInteractiveSession
     running: bool
 
 
@@ -161,7 +159,7 @@ class CodeExecution(Tool):
                     cwd=cwd,
                 )
             else:
-                shell = LocalInteractiveSession(cwd=cwd)  # type: ignore[assignment]
+                shell = LocalInteractiveSession(cwd=cwd)
 
             shells[session] = ShellWrap(id=session, session=shell, running=False)
             await shell.connect()
@@ -174,9 +172,7 @@ class CodeExecution(Tool):
 
     async def execute_python_code(self, session: int, code: str, reset: bool = False):
         escaped_code = shlex.quote(code)
-        # Prefer ipython when available; fall back to python3 (IMPROVE.md #0)
-        python_runner = shutil.which("ipython") or "python3"
-        command = f"{python_runner} -c {escaped_code}"
+        command = f"ipython -c {escaped_code}"
         prefix = "python> " + self.format_command_for_output(code) + "\n\n"
         return await self.terminal_session(session, command, reset, prefix)
 

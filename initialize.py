@@ -11,7 +11,7 @@ def initialize_agent(override_settings: dict | None = None):
 
     def _normalize_model_kwargs(kwargs: dict) -> dict:
         # convert string values that represent valid Python numbers to numeric types
-        result: dict[str, object] = {}
+        result = {}
         for key, value in kwargs.items():
             if isinstance(value, str):
                 # try to convert string to number if it's a valid Python number

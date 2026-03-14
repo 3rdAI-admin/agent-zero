@@ -1026,7 +1026,7 @@ class Agent:
         paths = subagents.get_paths(self, "tools", name + ".py", default_root="python")
         for path in paths:
             try:
-                classes = extract_tools.load_classes_from_file(path, Tool)  # type: ignore[type-abstract]
+                classes = extract_tools.load_classes_from_file(path, Tool)  # type: ignore[arg-type]
                 break
             except Exception:
                 continue

@@ -151,7 +151,7 @@ def get_repo_status(repo_path: str) -> dict:
             commit = repo.head.commit
             last_commit = {
                 "hash": commit.hexsha[:7],
-                "message": str(commit.message).split("\n")[0][:80],
+                "message": commit.message.split("\n")[0][:80],
                 "author": str(commit.author),
                 "date": datetime.fromtimestamp(commit.committed_date).strftime(
                     "%Y-%m-%d %H:%M"

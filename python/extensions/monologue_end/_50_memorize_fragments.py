@@ -1,4 +1,4 @@
-from python.helpers import settings, errors, tokens
+from python.helpers import settings, errors
 from python.helpers.extension import Extension
 from python.helpers.memory import Memory
 from python.helpers.dirty_json import DirtyJson
@@ -38,13 +38,6 @@ class MemorizeMemories(Extension):
             # get system message and chat history for util llm
             system = self.agent.read_prompt("memory.memories_sum.sys.md")
             msgs_text = self.agent.concat_messages(self.agent.history)
-
-            # Truncate to fit within utility model context window (reserve tokens for system + response)
-            util_ctx = int(set.get("util_model_ctx_length", 32000))
-            max_input = int(util_ctx * float(set.get("util_model_ctx_input", 0.7)))
-            sys_tokens = tokens.approximate_tokens(system)
-            available = max(1000, max_input - sys_tokens - 500)
-            msgs_text = tokens.trim_to_tokens(msgs_text, available, "end")
 
             # # log query streamed by LLM
             # async def log_callback(content):
