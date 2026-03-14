@@ -49,5 +49,7 @@ uv pip install 'pip>=26.0'
 # install playwright
 bash /ins/install_playwright.sh "$@"
 
-# Preload A0
-python /git/agent-zero/preload.py --dockerized=true
+# Preload A0 with deterministic defaults during image build.
+if [ "${A0_SKIP_PRELOAD:-0}" != "1" ]; then
+    python /git/agent-zero/preload.py --dockerized=true --defaults-only
+fi

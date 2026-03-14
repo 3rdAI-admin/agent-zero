@@ -30,6 +30,36 @@ is_running() {
     docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
 }
 
+LAST_CONTAINER_SCHEME="http"
+
+container_endpoint_code() {
+    local path="$1"
+    local code="000"
+    local scheme
+    for scheme in http https; do
+        if [ "$scheme" = "https" ]; then
+            code=$(docker exec "$CONTAINER_NAME" curl -sk -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        else
+            code=$(docker exec "$CONTAINER_NAME" curl -s -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        fi
+        if [ "$code" != "000" ]; then
+            LAST_CONTAINER_SCHEME="$scheme"
+            echo "$code"
+            return 0
+        fi
+    done
+    echo "000"
+}
+
+container_endpoint_body() {
+    local path="$1"
+    if [ "${LAST_CONTAINER_SCHEME:-http}" = "https" ]; then
+        docker exec "$CONTAINER_NAME" curl -sk --max-time 3 "https://localhost:80${path}" 2>/dev/null || true
+    else
+        docker exec "$CONTAINER_NAME" curl -s --max-time 3 "http://localhost:80${path}" 2>/dev/null || true
+    fi
+}
+
 # Print settings from JSON (pipe or as first arg)
 print_settings() {
     local json="$1"
@@ -59,6 +89,139 @@ print("  Browser: ", brow_p, brow_n, "|", brow_b)
 ' 2>/dev/null || echo "  (could not parse settings)"
 }
 
+print_ready_status() {
+    local code="$1"
+    local body="$2"
+
+    if [[ -z "$body" ]]; then
+        echo -e "  Ready:      ${YELLOW}unknown${NC}"
+        return
+    fi
+
+    READY_BODY_ENV="$body" python3 - "$code" <<'PY'
+import json
+import os
+import sys
+
+code = sys.argv[1]
+try:
+    payload = json.loads(os.environ.get("READY_BODY_ENV", ""))
+except Exception:
+    print("  Ready:      unknown")
+    raise SystemExit(0)
+
+ready = bool(payload.get("ready"))
+phases = payload.get("phases", {}) if isinstance(payload, dict) else {}
+blocking = [
+    name
+    for name, phase in phases.items()
+    if isinstance(phase, dict)
+    and phase.get("required")
+    and phase.get("status") != "ready"
+]
+degraded = [
+    name
+    for name, phase in phases.items()
+    if isinstance(phase, dict)
+    and not phase.get("required")
+    and phase.get("status") == "failed"
+]
+
+if ready:
+    print("  Ready:      ready")
+else:
+    reason = ", ".join(blocking) if blocking else f"http {code}"
+    print(f"  Ready:      not ready ({reason})")
+
+if degraded:
+    print(f"  Degraded:   {', '.join(degraded)}")
+PY
+}
+
+print_runtime_state_status() {
+    local body="$1"
+
+    if [[ -z "$body" ]]; then
+        echo "  Runtime:    unavailable"
+        return
+    fi
+
+    RUNTIME_STATE_ENV="$body" python3 - <<'PY'
+import json
+import os
+
+try:
+    payload = json.loads(os.environ.get("RUNTIME_STATE_ENV", ""))
+except Exception:
+    print("  Runtime:    unavailable")
+    raise SystemExit(0)
+
+paths = payload.get("paths", {})
+seed = payload.get("seed", {})
+env = payload.get("env", {})
+runtime = payload.get("runtime", {})
+models = payload.get("models", {})
+mcp = payload.get("mcp", {})
+drift = payload.get("drift", {})
+
+live_path = paths.get("effective_settings_path", "(unknown)")
+seed_path = paths.get("repo_seed_settings_path", "(unknown)")
+seed_source = seed.get("source", "default_settings")
+override_count = env.get("override_count", 0)
+override_suffix = ""
+if override_count:
+    override_suffix = f" ({override_count} override key(s))"
+
+print(f"  Runtime:    live={live_path}")
+print(f"  Seed:       {seed_source} @ {seed_path}")
+print(
+    "  Env:        root={root_present} usr={user_present}{suffix}".format(
+        root_present="yes" if env.get("root_env_present") else "no",
+        user_present="yes" if env.get("user_env_present") else "no",
+        suffix=override_suffix,
+    )
+)
+print(
+    "  Derived:    {fields}".format(
+        fields=", ".join(runtime.get("runtime_derived_fields", [])) or "(none)"
+    )
+)
+
+live_models = models.get("live", {})
+seed_models = models.get("seed", {})
+print(
+    "  Models:     live chat={chat} | util={utility} | browser={browser}".format(
+        chat=live_models.get("chat", "(unset)"),
+        utility=live_models.get("utility", "(unset)"),
+        browser=live_models.get("browser", "(unset)"),
+    )
+)
+if models.get("drift_fields"):
+    print(
+        "  Model drift: fields={fields}".format(
+            fields=", ".join(models.get("drift_fields", []))
+        )
+    )
+    print(
+        "  Model seed:  chat={chat} | util={utility} | browser={browser}".format(
+            chat=seed_models.get("chat", "(unset)"),
+            utility=seed_models.get("utility", "(unset)"),
+            browser=seed_models.get("browser", "(unset)"),
+        )
+    )
+
+live_servers = ", ".join(mcp.get("live_server_names", [])) or "(none)"
+seed_servers = ", ".join(mcp.get("seed_server_names", [])) or "(none)"
+print(f"  MCP:        live={live_servers}")
+if mcp.get("drift_fields"):
+    print("  MCP drift:  fields={fields}".format(fields=", ".join(mcp.get("drift_fields", []))))
+    print(f"  MCP seed:   {seed_servers}")
+
+for warning in drift.get("warnings", []):
+    print(f"  Warning:    {warning}")
+PY
+}
+
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════${NC}"
 echo -e "${CYAN}Agent Zero – Status${NC}"
@@ -86,8 +249,12 @@ fi
 # Container and health
 STATUS=$(docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Status}}" 2>/dev/null || echo "unknown")
 HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "no-healthcheck")
+container_endpoint_code "/health" >/dev/null
+READY_CODE=$(container_endpoint_code "/ready")
+READY_BODY=$(container_endpoint_body "/ready")
 echo -e "  Container:  ${GREEN}running${NC} ($STATUS)"
 echo -e "  Health:     $([ "$HEALTH_STATUS" = "healthy" ] && echo -e "${GREEN}healthy${NC}" || echo -e "${YELLOW}${HEALTH_STATUS}${NC}")"
+print_ready_status "$READY_CODE" "$READY_BODY"
 echo ""
 
 # Supervisor services (best-effort)
@@ -113,8 +280,14 @@ else
 fi
 echo ""
 
+# Runtime truth and drift warnings from the live container.
+echo -e "  ${CYAN}Runtime State:${NC}"
+RUNTIME_STATE_JSON=$(docker exec "$CONTAINER_NAME" /bin/sh -lc 'PYTHONPATH=/a0 /opt/venv-a0/bin/python -c "import json, sys; sys.argv.append(\"--dockerized=true\"); from python.helpers import runtime; runtime.initialize(); from python.helpers.runtime_state_report import build_runtime_state_report; print(json.dumps(build_runtime_state_report()))"' 2>/dev/null || true)
+print_runtime_state_status "$RUNTIME_STATE_JSON"
+echo ""
+
 # Access
-echo -e "  ${CYAN}Web UI:${NC}     http://localhost:${HOST_PORT}"
+echo -e "  ${CYAN}Web UI:${NC}     ${LAST_CONTAINER_SCHEME}://localhost:${HOST_PORT}"
 echo -e "  ${CYAN}VNC:${NC}        vnc://localhost:5901"
 echo ""
 echo -e "  Logs:       ${DOCKER_COMPOSE_CMD[*]} logs -f agent-zero"

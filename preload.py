@@ -1,13 +1,21 @@
 import asyncio
+import sys
 from python.helpers import runtime, whisper, settings
 from python.helpers.print_style import PrintStyle
 from python.helpers import kokoro_tts
 import models
 
 
-async def preload():
+def resolve_preload_settings(*, defaults_only: bool = False) -> settings.Settings:
+    """Resolve preload settings for build-time or runtime use."""
+    if defaults_only:
+        return settings.get_default_settings()
+    return settings.get_settings()
+
+
+async def preload(*, defaults_only: bool = False):
     try:
-        set = settings.get_default_settings()
+        set = resolve_preload_settings(defaults_only=defaults_only)
 
         # preload whisper model
         async def preload_whisper():
@@ -52,6 +60,8 @@ async def preload():
 
 # preload transcription model
 if __name__ == "__main__":
-    PrintStyle().print("Running preload...")
+    defaults_only = "--defaults-only" in sys.argv
+    mode = "defaults-only" if defaults_only else "runtime-settings"
+    PrintStyle().print(f"Running preload ({mode})...")
     runtime.initialize()
-    asyncio.run(preload())
+    asyncio.run(preload(defaults_only=defaults_only))

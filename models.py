@@ -519,6 +519,11 @@ class LiteLLMChatWrapper(SimpleChatModel):
 
         stream = reasoning_callback is not None or response_callback is not None or tokens_callback is not None
 
+        # Default timeouts to prevent indefinite hangs (e.g. Ollama model loading stalls).
+        # Can be overridden via litellm_global_kwargs or per-model config.
+        call_kwargs.setdefault("timeout", 300)         # 5 min for initial response
+        call_kwargs.setdefault("stream_timeout", 60)   # 60s between stream chunks
+
         # results
         result = ChatGenerationResult()
 

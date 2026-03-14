@@ -13,6 +13,7 @@ When you run `docker compose up`, the **`workspace_mcp`** service starts alongsi
 | **URL (from Agent Zero)** | `http://workspace_mcp:8889/mcp` |
 | **Type** | `streamable-http` |
 | **Port** | 8889 (internal; not exposed to host by default) |
+| **Multi-user** | OAuth 2.1 enabled (`MCP_ENABLE_OAUTH21=true`); clients can pass `Authorization: Bearer <token>` to use different Google accounts. |
 
 ### First-time setup (OAuth)
 
@@ -26,10 +27,11 @@ When you run `docker compose up`, the **`workspace_mcp`** service starts alongsi
    ```
    Use a tool (e.g. list emails) to trigger OAuth, then stop the script (Ctrl+C).
 
-3. Copy credentials for the container:
+3. Copy credentials for the container and restrict permissions:
    ```bash
    mkdir -p workspace-mcp-credentials
    cp -r ~/.google_workspace_mcp/* workspace-mcp-credentials/
+   chmod 700 workspace-mcp-credentials
    ```
 
 4. Start the stack: `docker compose up -d`
@@ -42,6 +44,8 @@ When you run `docker compose up`, the **`workspace_mcp`** service starts alongsi
      "type": "streamable-http"
    }
    ```
+
+   Single-account safety: keep `google_workspace` in **Agent Zero user settings only**. Do **not** add it to repo-wide `.mcp.json` or other shared/default MCP configs unless you intentionally want other local agents to act as the same Google account.
 
 ### Optional: expose port 8889 on the host
 
@@ -63,8 +67,46 @@ If you prefer the MCP server on the host (e.g. for easier OAuth in a browser):
 
 Optional: `./scripts/setup/add_workspace_mcp_remote.sh` inserts this server into settings automatically.
 
+## Multi-user (OAuth 2.1)
+
+The container runs with **OAuth 2.1 multi-user** enabled. Multiple Google accounts are supported: each client sends `Authorization: Bearer <token>` so the server uses the correct user’s credentials. Obtain tokens via the server’s OAuth 2.1 flow or set `EXTERNAL_OAUTH21_PROVIDER=true` and validate tokens from your own IdP. Details: [workspacemcp.com/docs](https://workspacemcp.com/docs).
+
+## Security
+
+- The container runs as **non-root** user `mcp`; credentials are at `/home/mcp/.google_workspace_mcp`.
+- Restrict the host credentials dir: `chmod 700 workspace-mcp-credentials`.
+- For single-account mode, keep the service on Docker-internal networking only (`expose`, no `ports`) and limit `google_workspace` config to trusted local agents.
+- For bearer tokens (multi-user), use **HTTPS** in production and store tokens in a secrets manager. Restrict port 8889 with a firewall if exposed. See **[docker/workspace-mcp/SECURITY.md](../../docker/workspace-mcp/SECURITY.md)** and **[docker/workspace-mcp/PRODUCTION.md](../../docker/workspace-mcp/PRODUCTION.md)** for details, TLS/reverse-proxy examples (Caddy/nginx), and a production checklist.
+
+## Testing the MCP service
+
+From the host (with the stack running), verify the service is reachable from the agent-zero container:
+
+```bash
+# Root should return 200
+docker exec agent-zero curl -sS -o /dev/null -w "%{http_code}" "http://workspace_mcp:8889/"
+
+# /mcp returns 401 without a bearer token (expected — endpoint is protected)
+docker exec agent-zero curl -sS -o /dev/null -w "%{http_code}" "http://workspace_mcp:8889/mcp"
+```
+
+- **200** on `/` → service is up and reachable.
+- **401** on `/mcp` → streamable-http endpoint is up and correctly requiring authentication (OAuth/bearer token).
+
+After first-time OAuth and adding the server in Settings → MCP, the agent can call the tools with a valid session.
+
+### "Failed to initialize. unhandled errors in a TaskGroup"
+
+Usually means the MCP server rejected the connection (e.g. **401** when OAuth 2.1 requires a bearer token and the client sends none).
+
+- **Single-account (recommended):** In `docker-compose.yml`, set `MCP_ENABLE_OAUTH21=false` for the `workspace_mcp` service. Restart: `docker compose up -d workspace_mcp`. Ensure first-time OAuth is done and `workspace-mcp-credentials/` is populated (see steps above).
+- **Multi-user:** Keep `MCP_ENABLE_OAUTH21=true` and add a bearer token in Settings → MCP for `google_workspace`: `"headers": { "Authorization": "Bearer <your-token>" }` (obtain token via the server’s OAuth 2.1 flow).
+
+Also confirm the JSON in Settings → MCP has **no trailing comma** after the last server block (invalid JSON prevents loading).
+
 ## See also
 
+- **[Quick setup: single vs multi-credential (remote hosts)](./QUICKSETUP.md)** — Client config examples for local and remote hosts
 - [MCP Setup guide](../guides/mcp-setup.md) — Full MCP configuration, stdio option, and tool tiers
 - [docker/workspace-mcp/README.md](../../docker/workspace-mcp/README.md) — Dockerfile and build notes
 - [scripts/setup/README.md](../../scripts/setup/README.md) — Host scripts (run_workspace_mcp.sh, add_workspace_mcp_remote.sh)

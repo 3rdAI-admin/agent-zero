@@ -1,6 +1,7 @@
 #!/bin/bash
 # Agent Zero startup: check GitHub updates → check running instance → graceful shutdown → start → health check → status.
 # Run from repo root (where docker-compose.yml and .env live).
+# Extra mode: ./startup.sh --logs [docker compose logs args]
 
 set -e
 
@@ -11,8 +12,20 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$SCRIPT_DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
+
+# Keep .env backed up and restore it if it was accidentally removed.
+# shellcheck source=/dev/null
+source "$REPO_ROOT/scripts/lib/ensure_env.sh"
+ensure_env_file "$REPO_ROOT"
 
 # Docker Compose command
 if docker compose version >/dev/null 2>&1; then
@@ -25,7 +38,9 @@ CONTAINER_NAME="agent-zero"
 HOST_PORT="${HOST_PORT:-8888}"
 STOP_TIMEOUT=30
 HEALTH_WAIT_MAX=90
+READY_WAIT_MAX=90
 GITHUB_TIMEOUT=8
+ARCHON_NETWORK_NAME="archon_app-network"
 
 info()  { echo -e "${CYAN}[INFO]${NC} $1"; }
 ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -35,6 +50,85 @@ fail()  { echo -e "${RED}[FAIL]${NC} $1"; }
 is_running() {
     docker ps --filter "name=^${CONTAINER_NAME}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
 }
+
+is_connected_to_network() {
+    local network_name="$1"
+    docker inspect --format '{{json .NetworkSettings.Networks}}' "$CONTAINER_NAME" 2>/dev/null | grep -q "\"${network_name}\""
+}
+
+LAST_CONTAINER_SCHEME="http"
+
+container_endpoint_code() {
+    local path="$1"
+    local code="000"
+    local scheme
+    for scheme in http https; do
+        if [ "$scheme" = "https" ]; then
+            code=$(docker exec "$CONTAINER_NAME" curl -sk -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        else
+            code=$(docker exec "$CONTAINER_NAME" curl -s -o /dev/null -w '%{http_code}' --max-time 3 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        fi
+        if [ "$code" != "000" ]; then
+            LAST_CONTAINER_SCHEME="$scheme"
+            echo "$code"
+            return 0
+        fi
+    done
+    echo "000"
+}
+
+show_logs() {
+    local extra_args=("$@")
+    if [ ${#extra_args[@]} -eq 0 ]; then
+        extra_args=(-f --tail "${LOG_TAIL_LINES:-200}")
+    fi
+    exec "${DOCKER_COMPOSE_CMD[@]}" logs "${extra_args[@]}" "$CONTAINER_NAME"
+}
+
+attach_optional_archon_network() {
+    if ! is_running; then
+        return
+    fi
+
+    if ! docker network inspect "$ARCHON_NETWORK_NAME" >/dev/null 2>&1; then
+        warn "Optional external network ${ARCHON_NETWORK_NAME} not present; Archon Docker DNS access will be unavailable."
+        return
+    fi
+
+    if is_connected_to_network "$ARCHON_NETWORK_NAME"; then
+        info "Optional external network ${ARCHON_NETWORK_NAME} already connected."
+        return
+    fi
+
+    if docker network connect "$ARCHON_NETWORK_NAME" "$CONTAINER_NAME" >/dev/null 2>&1; then
+        ok "Connected optional external network ${ARCHON_NETWORK_NAME}."
+    else
+        warn "Could not connect optional external network ${ARCHON_NETWORK_NAME}; continuing without it."
+    fi
+}
+
+warn_optional_dependencies() {
+    local service
+    for service in ollama workspace_mcp; do
+        if "${DOCKER_COMPOSE_CMD[@]}" ps --status running --services 2>/dev/null | grep -qx "$service"; then
+            continue
+        fi
+
+        case "$service" in
+            ollama)
+                warn "Optional service ollama is not running; Ollama-based presets and local LLM API targets may be unavailable."
+                ;;
+            workspace_mcp)
+                warn "Optional service workspace_mcp is not running; Google Workspace MCP tools will be unavailable until started."
+                ;;
+        esac
+    done
+}
+
+if [ "${1:-}" = "--logs" ]; then
+    shift
+    show_logs "$@"
+fi
 
 # ─── 0. Check GitHub for updates (best-effort, non-fatal) ───────────────────
 check_github_updates() {
@@ -129,6 +223,8 @@ if ! "${DOCKER_COMPOSE_CMD[@]}" up -d agent-zero; then
     exit 1
 fi
 ok "Start command issued."
+attach_optional_archon_network
+warn_optional_dependencies
 
 # ─── 3. Health check ──────────────────────────────────────────────────────
 info "Waiting for health (max ${HEALTH_WAIT_MAX}s)..."
@@ -146,7 +242,8 @@ while [ $WAITED -lt $HEALTH_WAIT_MAX ]; do
         break
     fi
     # Also accept: Web UI /health responds (in case healthcheck not yet updated)
-    if docker exec "$CONTAINER_NAME" curl -fsS -o /dev/null --max-time 3 http://localhost:80/health 2>/dev/null; then
+    HEALTH_CODE=$(container_endpoint_code "/health")
+    if [ "$HEALTH_CODE" = "200" ]; then
         ok "Web UI responding."
         break
     fi
@@ -161,6 +258,30 @@ if [ $WAITED -ge $HEALTH_WAIT_MAX ]; then
     warn "Check: docker logs $CONTAINER_NAME"
 fi
 
-# ─── 4. Status (container, health, settings, access) ─────────────────────
+# ─── 4. Readiness check ───────────────────────────────────────────────────
+info "Waiting for readiness (max ${READY_WAIT_MAX}s)..."
+WAITED=0
+while [ $WAITED -lt $READY_WAIT_MAX ]; do
+    if ! is_running; then
+        fail "Container exited unexpectedly during readiness wait."
+        docker logs --tail 30 "$CONTAINER_NAME" 2>/dev/null || true
+        exit 1
+    fi
+    READY_CODE=$(container_endpoint_code "/ready")
+    if [ "$READY_CODE" = "200" ]; then
+        ok "Application is ready."
+        break
+    fi
+    echo -n "."
+    sleep 3
+    WAITED=$((WAITED + 3))
+done
+echo ""
+
+# ─── 5. Status (container, health, settings, access) ─────────────────────
+if [ $WAITED -ge $READY_WAIT_MAX ]; then
+    warn "Readiness check did not pass within ${READY_WAIT_MAX}s. Service is live but not fully ready."
+fi
+
 export CONTAINER_NAME HOST_PORT
 "$REPO_ROOT/scripts/show_status.sh" || exit 1

@@ -18,7 +18,15 @@ import sys
 #   top_p             -> top_p             (direct)
 #   frequency_penalty -> repeat_penalty    (mapped by OllamaChatConfig.map_openai_params)
 #   max_tokens        -> num_predict       (mapped by OllamaChatConfig.map_openai_params)
-# Note: num_ctx has no OpenAI equivalent; set via Ollama Modelfile if needed.
+#   num_ctx           -> num_ctx           (Ollama-native, passed through by LiteLLM)
+#
+# num_ctx controls the KV-cache context window. Ollama defaults can be huge (e.g. 202K
+# for glm-4.7-flash) which consumes massive VRAM and causes stalls. Always set explicitly.
+# Recommendations by model param count:
+#   <= 3B  -> 4096    (~0.5 GB KV overhead)
+#   4-8B   -> 8192    (~1 GB)
+#   9-30B  -> 16384   (~2-8 GB)
+#   > 30B  -> 8192    (conserve VRAM for weights)
 _OLLAMA_CHAT_KWARGS: dict = {
     "temperature": 0.4,          # Up from 0.1; reduces deterministic repetition loops
     "frequency_penalty": 1.3,    # -> repeat_penalty 1.3; penalize repeated tokens
@@ -36,8 +44,41 @@ _OLLAMA_UTIL_KWARGS: dict = {
     "max_tokens": 2048,          # -> num_predict 2048; utility responses shorter
 }
 
+# num_ctx values by model size tier
+_CTX_SMALL = 4096    # <= 3B params (gemma3:1b)
+_CTX_MEDIUM = 8192   # 4-8B params (qwen2.5:latest, qwen3:latest)
+_CTX_LARGE = 16384   # 9-30B params (qwen3-14b, gpt-oss:20b, devstral, glm-4.7-flash, qwen3-coder)
+
 # Presets: provider, model name, api_base (empty = use provider default from model_providers.yaml)
 PRESETS = {
+    "google": {
+        "chat_model_provider": "google",
+        "chat_model_name": "gemini-2.5-flash",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 1000000,
+        "util_model_provider": "google",
+        "util_model_name": "gemini-2.5-flash",
+        "util_model_api_base": "",
+        "util_model_ctx_length": 1000000,
+        "util_model_kwargs": {"temperature": 0.2},
+        "browser_model_provider": "google",
+        "browser_model_name": "gemini-2.5-flash",
+        "browser_model_api_base": "",
+    },
+    "google_pro": {
+        "chat_model_provider": "google",
+        "chat_model_name": "gemini-2.5-pro",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 1000000,
+        "util_model_provider": "google",
+        "util_model_name": "gemini-2.5-flash",
+        "util_model_api_base": "",
+        "util_model_ctx_length": 1000000,
+        "util_model_kwargs": {"temperature": 0.2},
+        "browser_model_provider": "google",
+        "browser_model_name": "gemini-2.5-flash",
+        "browser_model_api_base": "",
+    },
     "anthropic": {
         "chat_model_provider": "anthropic",
         "chat_model_name": "claude-sonnet-4-6",
@@ -86,27 +127,27 @@ PRESETS = {
         "util_model_name": "gemma3:1b",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_SMALL},
         "browser_model_provider": "ollama",
         "browser_model_name": "qwen2.5:latest",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_MEDIUM},
     },
     "ollama": {
         "chat_model_provider": "ollama",
         "chat_model_name": "qwen2.5:latest",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "num_ctx": _CTX_MEDIUM},
         "util_model_provider": "ollama",
         "util_model_name": "gemma3:1b",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_SMALL},
         "browser_model_provider": "ollama",
         "browser_model_name": "qwen2.5:latest",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_MEDIUM},
     },
     "ollama_dual": {
         # .7 = local, .10 = remote: chat/browser on local (low latency), utility on remote (offload background work)
@@ -114,16 +155,16 @@ PRESETS = {
         "chat_model_name": "qwen2.5:latest",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "num_ctx": _CTX_MEDIUM},
         "util_model_provider": "ollama",
         "util_model_name": "gemma3:1b",
         "util_model_api_base": "http://192.168.50.10:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_SMALL},
         "browser_model_provider": "ollama",
         "browser_model_name": "qwen2.5:latest",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_MEDIUM},
     },
     "ollama_glm": {
         # GLM-4.7-Flash 30B MoE (~3B active). Use :32k for VRAM savings (run scripts/ollama_create_modelfiles.sh on Ollama server first).
@@ -131,16 +172,16 @@ PRESETS = {
         "chat_model_name": "glm-4.7-flash:32k",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},  # GLM: stronger penalty to reduce loops
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45, "num_ctx": _CTX_LARGE},
         "util_model_provider": "ollama",
         "util_model_name": "gpt-oss:20b",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_LARGE},
         "browser_model_provider": "ollama",
         "browser_model_name": "glm-4.7-flash:32k",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45, "num_ctx": _CTX_LARGE},
     },
     "ollama_qwen3": {
         # Qwen3-Coder 30B MoE: agentic-trained; slightly higher temp for diversity
@@ -149,16 +190,16 @@ PRESETS = {
         "chat_model_name": "qwen3-coder:30b",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "temperature": 0.3},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "temperature": 0.3, "num_ctx": _CTX_LARGE},
         "util_model_provider": "ollama",
-        "util_model_name": "gpt-oss:20b",
+        "util_model_name": "qwen2.5:latest",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_MEDIUM},
         "browser_model_provider": "ollama",
         "browser_model_name": "qwen3-coder:30b",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_LARGE},
     },
     "ollama_mixed": {
         # Best-of-breed: GLM chat (reasoning), Devstral browser (384K ctx, vision), GPT-OSS utility (fast)
@@ -167,34 +208,34 @@ PRESETS = {
         "chat_model_name": "glm-4.7-flash:32k",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45, "num_ctx": _CTX_LARGE},
         "util_model_provider": "ollama",
         "util_model_name": "gpt-oss:20b",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_LARGE},
         "browser_model_provider": "ollama",
         "browser_model_name": "devstral-small-2",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_LARGE},
     },
-    "ollama_claude": {
-        # Claude Opus 4.5 distilled into Qwen3-14B (TeichAI): dense model, lighter repeat penalty
+    "ollama_baz": {
+        # Claude Opus 4.5 distilled into Qwen3-14B (TeichAI): dense model, all roles
         # Requires: ollama pull bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning
         "chat_model_provider": "ollama",
         "chat_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "num_ctx": _CTX_LARGE},
         "util_model_provider": "ollama",
-        "util_model_name": "gpt-oss:20b",
+        "util_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "frequency_penalty": 1.1},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "num_ctx": _CTX_LARGE},
         "browser_model_provider": "ollama",
         "browser_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.1},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "num_ctx": _CTX_LARGE},
     },
     "ollama_glm_claude": {
         # Hybrid: GLM-4.7-Flash chat/browser + Claude-distilled utility. GLM :32k via scripts/ollama_create_modelfiles.sh
@@ -202,16 +243,16 @@ PRESETS = {
         "chat_model_name": "glm-4.7-flash:32k",
         "chat_model_api_base": "http://192.168.50.7:11434",
         "chat_model_ctx_length": 32000,
-        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45},
+        "chat_model_kwargs": {**_OLLAMA_CHAT_KWARGS, "frequency_penalty": 1.45, "num_ctx": _CTX_LARGE},
         "util_model_provider": "ollama",
         "util_model_name": "bazobehram/qwen3-14b-claude-4.5-opus-high-reasoning",
         "util_model_api_base": "http://192.168.50.7:11434",
         "util_model_ctx_length": 32000,
-        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "frequency_penalty": 1.1},
+        "util_model_kwargs": {**_OLLAMA_UTIL_KWARGS, "frequency_penalty": 1.1, "num_ctx": _CTX_LARGE},
         "browser_model_provider": "ollama",
         "browser_model_name": "glm-4.7-flash:32k",
         "browser_model_api_base": "http://192.168.50.7:11434",
-        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45},
+        "browser_model_kwargs": {**_OLLAMA_BROWSER_KWARGS, "frequency_penalty": 1.45, "num_ctx": _CTX_LARGE},
     },
 }
 
@@ -235,7 +276,7 @@ def main():
     preset_name = raw.replace("-", "_")
     if len(sys.argv) < 2 or preset_name not in PRESETS:
         print(
-            "Usage: switch_model_preset.py <preset> [--test-llm]  (presets: anthropic venice agent-zero deepseek ollama ollama-dual ollama-glm ollama-qwen3 ollama-mixed ollama-claude ollama-glm-claude)",
+            "Usage: switch_model_preset.py <preset> [--test-llm]  (presets: anthropic venice agent-zero deepseek ollama ollama-dual ollama-glm ollama-qwen3 ollama-mixed ollama-baz ollama-glm-claude)",
             file=sys.stderr,
         )
         sys.exit(2)

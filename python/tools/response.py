@@ -4,7 +4,9 @@ from python.helpers.tool import Tool, Response
 class ResponseTool(Tool):
     async def execute(self, **kwargs):
         return Response(
-            message=self.args["text"] if "text" in self.args else self.args["message"],
+            message=self.args.get("text")
+            or self.args.get("message")
+            or self.args.get("content", ""),
             break_loop=True,
         )
 

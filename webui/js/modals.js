@@ -153,7 +153,11 @@ export function openModal(modalPath, beforeClose = null) {
         })
         .catch((error) => {
           console.error("Error loading modal content:", error);
-          modal.body.innerHTML = `<div class="error">Failed to load modal content: ${error.message}</div>`;
+          const msg = document.createElement("div");
+          msg.className = "error";
+          msg.textContent = `Failed to load modal content: ${error?.message ?? "Unknown error"}`;
+          modal.body.innerHTML = "";
+          modal.body.appendChild(msg);
         });
 
       // Add modal to stack and show it

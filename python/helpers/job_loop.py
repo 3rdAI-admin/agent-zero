@@ -38,11 +38,32 @@ async def run_loop():
         )  # TODO! - if we lower it under 1min, it can run a 5min job multiple times in it's target minute
 
 
+def _ensure_autonomy_scheduler_started():
+    """Start APScheduler once (Phase 1); sync scheduled tasks to it."""
+    from python.helpers.autonomy_scheduler import AutonomyScheduler
+
+    autonomy = AutonomyScheduler.get()
+    autonomy.start()
+    autonomy.sync_scheduled_tasks()
+
+
 async def scheduler_tick():
-    # Get the task scheduler instance and print detailed debug info
+    _ensure_autonomy_scheduler_started()
+
     scheduler = TaskScheduler.get()
-    # Run the scheduler tick
     await scheduler.tick()
+
+    # AUTON-03: process one goal from the queue per tick (same executor)
+    from python.helpers.goal_queue import pop_next
+
+    task_uuid = pop_next()
+    if task_uuid:
+        try:
+            await scheduler.run_task_by_uuid(task_uuid)
+        except Exception as e:
+            PrintStyle().error(
+                f"Goal queue task {task_uuid} failed: {errors.format_error(e)}"
+            )
 
 
 def pause_loop():

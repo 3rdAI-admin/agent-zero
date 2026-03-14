@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+# Filter upstream deprecation warnings from websockets/uvicorn legacy API.
+# uvicorn 0.41.0 still imports websockets.legacy; nothing we can fix until
+# uvicorn migrates to the new websockets API.
+filterwarnings = [
+    "ignore:websockets\\.legacy is deprecated:DeprecationWarning",
+    "ignore:websockets\\.server\\.WebSocketServerProtocol is deprecated:DeprecationWarning",
+    "ignore:remove second argument of ws_handler:DeprecationWarning",
+]

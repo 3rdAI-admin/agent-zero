@@ -8,6 +8,7 @@ import asyncio
 import httpx
 import sys
 import json
+import subprocess
 
 async def test_mcp_connection(base_url: str, token: str, verify: bool = False):
     """Test MCP connection to Agent Zero. Use verify=False for self-signed cert."""
@@ -58,13 +59,24 @@ async def test_mcp_connection(base_url: str, token: str, verify: bool = False):
             return False
 
 def get_mcp_token_from_settings():
-    """Try to get MCP token from settings file"""
+    """Try to get the runtime-derived MCP token from the container."""
     try:
-        with open("/a0/tmp/settings.json", "r") as f:
-            settings = json.load(f)
-            token = settings.get("mcp_server_token", "")
-            if token:
-                return token
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "agent-zero",
+                "bash",
+                "-lc",
+                "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        token = result.stdout.strip()
+        if result.returncode == 0 and token:
+            return token
     except Exception:
         pass
     return None
@@ -82,19 +94,7 @@ async def main():
     if len(sys.argv) >= 3:
         base_url = sys.argv[2]
     if not token:
-        # Try to read from container settings
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["docker", "exec", "agent-zero", "cat", "/a0/tmp/settings.json"],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                settings = json.loads(result.stdout)
-                token = settings.get("mcp_server_token", "")
-        except Exception:
-            pass
+        token = get_mcp_token_from_settings()
 
     if not token:
         print("\n⚠️  MCP token not provided")

@@ -6,7 +6,14 @@ import asyncio
 
 class RenameChat(Extension):
     async def execute(self, loop_data: LoopData = LoopData(), **kwargs):
-        asyncio.create_task(self.change_name())
+        asyncio.create_task(self._change_name_with_timeout())
+
+    async def _change_name_with_timeout(self):
+        """Wrap change_name with a timeout so a stalled utility model doesn't hang."""
+        try:
+            await asyncio.wait_for(self.change_name(), timeout=30)
+        except asyncio.TimeoutError:
+            pass  # non-critical, just abandon
 
     async def change_name(self):
         try:

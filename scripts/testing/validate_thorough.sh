@@ -16,6 +16,37 @@ PASSED=0
 FAILED=0
 SKIPPED=0
 WARNINGS=0
+RELIABILITY_OK=0
+
+LAST_CONTAINER_SCHEME="http"
+
+container_endpoint_code() {
+    local path="$1"
+    local code="000"
+    local scheme
+    for scheme in http https; do
+        if [ "$scheme" = "https" ]; then
+            code=$(docker exec agent-zero curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        else
+            code=$(docker exec agent-zero curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${scheme}://localhost:80${path}" 2>/dev/null || echo "000")
+        fi
+        if [ "$code" != "000" ]; then
+            LAST_CONTAINER_SCHEME="$scheme"
+            echo "$code"
+            return 0
+        fi
+    done
+    echo "000"
+}
+
+container_endpoint_body() {
+    local path="$1"
+    if [ "${LAST_CONTAINER_SCHEME:-http}" = "https" ]; then
+        docker exec agent-zero curl -sk --max-time 5 "https://localhost:80${path}" 2>/dev/null || true
+    else
+        docker exec agent-zero curl -s --max-time 5 "http://localhost:80${path}" 2>/dev/null || true
+    fi
+}
 
 echo "=========================================="
 echo "Agent Zero Thorough Validation"
@@ -25,20 +56,21 @@ echo ""
 # Phase 1: Service Health Check
 echo -e "${BLUE}=== Phase 1: Service Health Check ===${NC}"
 CONTAINER_RUNNING=0
-WEB_UI_OK=0
+LIVENESS_OK=0
+READINESS_OK=0
 
 if docker ps --filter name=agent-zero --format "{{.Names}}" 2>/dev/null | grep -q "^agent-zero$"; then
     echo -e "${GREEN}✅ Container is running${NC}"
     CONTAINER_RUNNING=1
     ((PASSED++))
     
-    echo "Testing Web UI..."
-    if docker exec agent-zero curl -s -f -m 5 http://localhost:80 >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Web UI is accessible${NC}"
-        WEB_UI_OK=1
+    echo "Testing liveness endpoint..."
+    if [ "$(container_endpoint_code "/health")" = "200" ]; then
+        echo -e "${GREEN}✅ Liveness endpoint is accessible${NC}"
+        LIVENESS_OK=1
         ((PASSED++))
     else
-        echo -e "${RED}❌ Web UI not accessible${NC}"
+        echo -e "${RED}❌ Liveness endpoint not accessible${NC}"
         ((FAILED++))
     fi
 else
@@ -51,8 +83,80 @@ else
 fi
 echo ""
 
-# Phase 2: Container Health
-echo -e "${BLUE}=== Phase 2: Container Health ===${NC}"
+# Phase 2: Readiness
+echo -e "${BLUE}=== Phase 2: Readiness ===${NC}"
+READY_CODE=$(container_endpoint_code "/ready")
+READY_BODY=$(container_endpoint_body "/ready")
+if [ "$READY_CODE" = "200" ]; then
+    echo -e "${GREEN}✅ Readiness endpoint reports ready${NC}"
+    DEGRADED=$(READY_BODY_ENV="$READY_BODY" python3 - <<'PY'
+import json
+import os
+try:
+    payload = json.loads(os.environ.get("READY_BODY_ENV", ""))
+except Exception:
+    print("")
+    raise SystemExit(0)
+phases = payload.get("phases", {}) if isinstance(payload, dict) else {}
+degraded = [
+    name
+    for name, phase in phases.items()
+    if isinstance(phase, dict)
+    and not phase.get("required")
+    and phase.get("status") == "failed"
+]
+print(", ".join(degraded))
+PY
+)
+    if [ -n "$DEGRADED" ]; then
+        echo -e "${YELLOW}⚠️  Degraded phases: $DEGRADED${NC}"
+        ((WARNINGS++))
+    fi
+    READINESS_OK=1
+    ((PASSED++))
+else
+    BLOCKING=$(READY_BODY_ENV="$READY_BODY" python3 - <<'PY'
+import json
+import os
+import sys
+try:
+    payload = json.loads(os.environ.get("READY_BODY_ENV", ""))
+except Exception:
+    print("")
+    raise SystemExit(0)
+phases = payload.get("phases", {}) if isinstance(payload, dict) else {}
+blocking = [
+    name
+    for name, phase in phases.items()
+    if isinstance(phase, dict)
+    and phase.get("required")
+    and phase.get("status") != "ready"
+]
+print(", ".join(blocking))
+PY
+)
+    echo -e "${RED}❌ Readiness endpoint not ready${NC}"
+    if [ -n "$BLOCKING" ]; then
+        echo "   Blocking phases: $BLOCKING"
+    fi
+    ((FAILED++))
+fi
+echo ""
+
+# Phase 2b: Reliability
+echo -e "${BLUE}=== Phase 2b: Reliability ===${NC}"
+if ./scripts/testing/validate_reliability.sh; then
+    echo -e "${GREEN}✅ Reliability validation passed${NC}"
+    RELIABILITY_OK=1
+    ((PASSED++))
+else
+    echo -e "${RED}❌ Reliability validation failed${NC}"
+    ((FAILED++))
+fi
+echo ""
+
+# Phase 3: Container Health
+echo -e "${BLUE}=== Phase 3: Container Health ===${NC}"
 if docker ps --filter name=agent-zero --format "{{.Names}}" 2>/dev/null | grep -q "^agent-zero$"; then
     STATUS=$(docker ps --filter name=agent-zero --format "{{.Status}}")
     echo -e "${GREEN}✅ Container status: $STATUS${NC}"
@@ -65,8 +169,8 @@ else
 fi
 echo ""
 
-# Phase 3: Supervisor Services
-echo -e "${BLUE}=== Phase 3: Supervisor Services ===${NC}"
+# Phase 4: Supervisor Services
+echo -e "${BLUE}=== Phase 4: Supervisor Services ===${NC}"
 SERVICES=("run_ui" "xvfb" "fluxbox" "x11vnc" "autocutsel")
 RUNNING_COUNT=0
 TOTAL=${#SERVICES[@]}
@@ -93,8 +197,8 @@ fi
 echo "Services running: $RUNNING_COUNT/$TOTAL"
 echo ""
 
-# Phase 4: Claude Code Integration
-echo -e "${BLUE}=== Phase 4: Claude Code Integration ===${NC}"
+# Phase 5: Claude Code Integration
+echo -e "${BLUE}=== Phase 5: Claude Code Integration ===${NC}"
 CLAUDE_INSTALLED=0
 YOLO_WRAPPER=0
 
@@ -118,8 +222,8 @@ else
 fi
 echo ""
 
-# Phase 5: VNC Server
-echo -e "${BLUE}=== Phase 5: VNC Server ===${NC}"
+# Phase 6: VNC Server
+echo -e "${BLUE}=== Phase 6: VNC Server ===${NC}"
 VNC_OK=0
 XVFB_OK=0
 
@@ -143,17 +247,17 @@ else
 fi
 echo ""
 
-# Phase 6: MCP Server Configuration
-echo -e "${BLUE}=== Phase 6: MCP Server Configuration ===${NC}"
-TOKEN=$(docker exec agent-zero cat /a0/tmp/settings.json 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin).get("mcp_server_token", ""))' 2>/dev/null || echo "")
+# Phase 7: MCP Server Configuration
+echo -e "${BLUE}=== Phase 7: MCP Server Configuration ===${NC}"
+TOKEN="$(docker exec agent-zero bash -lc "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'" 2>/dev/null || true)"
 
 if [ -n "$TOKEN" ] && [ "$TOKEN" != "" ]; then
     echo -e "${GREEN}✅ MCP token configured: ${TOKEN:0:8}...${NC}"
     MCP_TOKEN=1
     ((PASSED++))
     
-    STATUS=$(docker exec agent-zero curl -s -o /dev/null -w '%{http_code}' http://localhost:80/mcp/t-${TOKEN}/sse 2>&1 || echo "000")
-    if [ "$STATUS" = "200" ] || [ "$STATUS" = "000" ]; then
+    STATUS=$(docker exec agent-zero curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost:80/mcp/t-${TOKEN}/sse 2>&1 || echo "000")
+    if [[ "$STATUS" == "200"* ]] || [ "$STATUS" = "000" ]; then
         echo -e "${GREEN}✅ MCP endpoint accessible${NC}"
         MCP_ENDPOINT=1
         ((PASSED++))
@@ -171,8 +275,8 @@ else
 fi
 echo ""
 
-# Phase 7: Volume Mounts
-echo -e "${BLUE}=== Phase 7: Volume Mounts ===${NC}"
+# Phase 8: Volume Mounts
+echo -e "${BLUE}=== Phase 8: Volume Mounts ===${NC}"
 VOLUMES=("memory" "knowledge" "logs" "tmp" "claude-config" "claude-credentials")
 MOUNTED_COUNT=0
 
@@ -193,8 +297,8 @@ fi
 echo "Volumes mounted: $MOUNTED_COUNT/${#VOLUMES[@]}"
 echo ""
 
-# Phase 8: Security Tools
-echo -e "${BLUE}=== Phase 8: Security Tools ===${NC}"
+# Phase 9: Security Tools
+echo -e "${BLUE}=== Phase 9: Security Tools ===${NC}"
 TOOLS=("nmap" "nikto" "sqlmap" "masscan")
 FOUND_COUNT=0
 
@@ -216,8 +320,8 @@ fi
 echo "Security tools found: $FOUND_COUNT/${#TOOLS[@]}"
 echo ""
 
-# Phase 9: Resource Limits
-echo -e "${BLUE}=== Phase 9: Resource Limits ===${NC}"
+# Phase 10: Resource Limits
+echo -e "${BLUE}=== Phase 10: Resource Limits ===${NC}"
 MEMORY=$(docker inspect agent-zero --format='{{.HostConfig.Memory}}' 2>/dev/null || echo "0")
 if [ "$MEMORY" != "0" ] && [ -n "$MEMORY" ]; then
     MEM_GB=$((MEMORY / 1024 / 1024 / 1024))
@@ -238,8 +342,8 @@ else
 fi
 echo ""
 
-# Phase 10: Network Configuration
-echo -e "${BLUE}=== Phase 10: Network Configuration ===${NC}"
+# Phase 11: Network Configuration
+echo -e "${BLUE}=== Phase 11: Network Configuration ===${NC}"
 CAPS=$(docker inspect agent-zero --format='{{.HostConfig.CapAdd}}' 2>/dev/null || echo "")
 if echo "$CAPS" | grep -q "NET_RAW"; then
     echo -e "${GREEN}✅ Network capabilities: NET_RAW, NET_ADMIN, SYS_ADMIN${NC}"
@@ -259,8 +363,8 @@ else
 fi
 echo ""
 
-# Phase 11: Integration Tests
-echo -e "${BLUE}=== Phase 11: Integration Tests ===${NC}"
+# Phase 12: Integration Tests
+echo -e "${BLUE}=== Phase 12: Integration Tests ===${NC}"
 if [ -f "scripts/testing/test_claude_integration.sh" ]; then
     echo "Running Claude Code integration test..."
     if bash scripts/testing/test_claude_integration.sh 2>&1 | head -30 | grep -q "✅"; then
@@ -286,17 +390,27 @@ echo "=========================================="
 echo ""
 printf "| %-25s | %-10s | %-30s |\n" "Phase" "Status" "Notes"
 echo "|---------------------------|------------|------------------------------|"
-printf "| %-25s | %-10s | %-30s |\n" "1. Service Health" "$([ $CONTAINER_RUNNING -eq 1 ] && [ $WEB_UI_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Container: $([ $CONTAINER_RUNNING -eq 1 ] && echo "running" || echo "stopped")"
-printf "| %-25s | %-10s | %-30s |\n" "2. Container Health" "$([ $CONTAINER_RUNNING -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Status checked"
-printf "| %-25s | %-10s | %-30s |\n" "3. Supervisor Services" "$([ $RUNNING_COUNT -eq $TOTAL ] && echo "✅ PASS" || [ $RUNNING_COUNT -gt 0 ] && echo "⚠️  PARTIAL" || echo "❌ FAIL")" "$RUNNING_COUNT/$TOTAL running"
-printf "| %-25s | %-10s | %-30s |\n" "4. Claude Code" "$([ $CLAUDE_INSTALLED -eq 1 ] && [ $YOLO_WRAPPER -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Installed: $([ $CLAUDE_INSTALLED -eq 1 ] && echo "yes" || echo "no")"
-printf "| %-25s | %-10s | %-30s |\n" "5. VNC Server" "$([ $VNC_OK -eq 1 ] && [ $XVFB_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "VNC: $([ $VNC_OK -eq 1 ] && echo "running" || echo "stopped")"
-printf "| %-25s | %-10s | %-30s |\n" "6. MCP Server" "$([ $MCP_TOKEN -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Token: $([ $MCP_TOKEN -eq 1 ] && echo "configured" || echo "not configured")"
-printf "| %-25s | %-10s | %-30s |\n" "7. Volume Mounts" "$([ $MOUNTED_COUNT -ge 4 ] && echo "✅ PASS" || echo "⚠️  PARTIAL")" "$MOUNTED_COUNT/${#VOLUMES[@]} mounted"
-printf "| %-25s | %-10s | %-30s |\n" "8. Security Tools" "$([ $FOUND_COUNT -gt 0 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "$FOUND_COUNT/${#TOOLS[@]} found"
-printf "| %-25s | %-10s | %-30s |\n" "9. Resource Limits" "$([ $RESOURCE_LIMITS -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Memory: ${MEM_GB}GB"
-printf "| %-25s | %-10s | %-30s |\n" "10. Network Config" "$([ $NETWORK_CAPS -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Capabilities configured"
-printf "| %-25s | %-10s | %-30s |\n" "11. Integration Tests" "$([ $INTEGRATION_TEST -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Test executed"
+printf "| %-25s | %-10s | %-30s |\n" "1. Service Health" "$([ $CONTAINER_RUNNING -eq 1 ] && [ $LIVENESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Container: $([ $CONTAINER_RUNNING -eq 1 ] && echo "running" || echo "stopped")"
+printf "| %-25s | %-10s | %-30s |\n" "2. Readiness" "$([ $READINESS_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Endpoint: /ready"
+printf "| %-25s | %-10s | %-30s |\n" "2b. Reliability" "$([ $RELIABILITY_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Runtime truth + guards"
+printf "| %-25s | %-10s | %-30s |\n" "3. Container Health" "$([ $CONTAINER_RUNNING -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Status checked"
+printf "| %-25s | %-10s | %-30s |\n" "4. Supervisor Services" "$(
+if [ $RUNNING_COUNT -eq $TOTAL ]; then
+    echo "✅ PASS"
+elif [ $RUNNING_COUNT -gt 0 ]; then
+    echo "⚠️  PARTIAL"
+else
+    echo "❌ FAIL"
+fi
+)" "$RUNNING_COUNT/$TOTAL running"
+printf "| %-25s | %-10s | %-30s |\n" "5. Claude Code" "$([ $CLAUDE_INSTALLED -eq 1 ] && [ $YOLO_WRAPPER -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "Installed: $([ $CLAUDE_INSTALLED -eq 1 ] && echo "yes" || echo "no")"
+printf "| %-25s | %-10s | %-30s |\n" "6. VNC Server" "$([ $VNC_OK -eq 1 ] && [ $XVFB_OK -eq 1 ] && echo "✅ PASS" || echo "❌ FAIL")" "VNC: $([ $VNC_OK -eq 1 ] && echo "running" || echo "stopped")"
+printf "| %-25s | %-10s | %-30s |\n" "7. MCP Server" "$([ $MCP_TOKEN -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Token: $([ $MCP_TOKEN -eq 1 ] && echo "configured" || echo "not configured")"
+printf "| %-25s | %-10s | %-30s |\n" "8. Volume Mounts" "$([ $MOUNTED_COUNT -ge 4 ] && echo "✅ PASS" || echo "⚠️  PARTIAL")" "$MOUNTED_COUNT/${#VOLUMES[@]} mounted"
+printf "| %-25s | %-10s | %-30s |\n" "9. Security Tools" "$([ $FOUND_COUNT -gt 0 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "$FOUND_COUNT/${#TOOLS[@]} found"
+printf "| %-25s | %-10s | %-30s |\n" "10. Resource Limits" "$([ $RESOURCE_LIMITS -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Memory: ${MEM_GB}GB"
+printf "| %-25s | %-10s | %-30s |\n" "11. Network Config" "$([ $NETWORK_CAPS -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Capabilities configured"
+printf "| %-25s | %-10s | %-30s |\n" "12. Integration Tests" "$([ $INTEGRATION_TEST -eq 1 ] && echo "✅ PASS" || echo "⚠️  SKIP")" "Test executed"
 echo ""
 
 echo -e "${GREEN}Passed: $PASSED${NC}"
@@ -308,7 +422,8 @@ echo ""
 # Overall status
 CRITICAL_FAILURES=0
 [ $CONTAINER_RUNNING -eq 0 ] && CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
-[ $WEB_UI_OK -eq 0 ] && CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+[ $LIVENESS_OK -eq 0 ] && CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+[ $READINESS_OK -eq 0 ] && CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
 [ $RUNNING_COUNT -eq 0 ] && CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
 
 if [ $CRITICAL_FAILURES -eq 0 ] && [ $FAILED -eq 0 ]; then
@@ -322,7 +437,8 @@ else
     echo ""
     echo "To fix:"
     [ $CONTAINER_RUNNING -eq 0 ] && echo "  - Start container: docker compose up -d"
-    [ $WEB_UI_OK -eq 0 ] && echo "  - Wait for services to initialize (30-60 seconds)"
+    [ $LIVENESS_OK -eq 0 ] && echo "  - Check /health and container logs"
+    [ $READINESS_OK -eq 0 ] && echo "  - Check /ready for blocking startup phases"
     [ $RUNNING_COUNT -eq 0 ] && echo "  - Check supervisor: docker exec agent-zero supervisorctl status"
     exit 1
 fi

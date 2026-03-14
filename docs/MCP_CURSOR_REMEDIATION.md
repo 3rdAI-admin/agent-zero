@@ -138,6 +138,28 @@ Archon’s MCP server uses **streamable HTTP only** at `http://<host>:8051/mcp` 
 
 **Check Archon is up:** `curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/health` (or your Archon host). Then reload MCP in Cursor.
 
+### Agent Zero settings fix
+
+If Agent Zero itself shows `archon` as failed while `crawl4ai_rag` and `google_workspace` still load, check the **Agent Zero user MCP settings** in `Settings -> MCP/A2A -> External MCP Servers`.
+
+For Agent Zero running in Docker, prefer a direct Docker-network configuration for Archon:
+
+```json
+{
+  "mcpServers": {
+    "archon": {
+      "description": "Archon MCP over Docker network",
+      "transport": "streamable-http",
+      "url": "http://archon-mcp:8051/mcp",
+      "init_timeout": 30,
+      "tool_timeout": 120
+    }
+  }
+}
+```
+
+Avoid using `npx mcp-remote` for this in Agent Zero user settings when the direct `archon-mcp` service is reachable on the Docker network. Also keep the global `mcp_client_init_timeout` at `30` seconds; a `10` second timeout proved too short for reliable Archon initialization.
+
 ## Summary
 
 - Normalize config: use `transport` + `url` for remote servers, `command` + `args` for stdio.

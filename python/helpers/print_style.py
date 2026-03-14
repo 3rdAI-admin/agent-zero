@@ -5,8 +5,10 @@ import sys
 from datetime import datetime
 from collections.abc import Mapping
 from . import files
+from .structured_log import get_logger
 
 _runtime_module = None
+_structured_logger = get_logger("app")
 
 
 def _get_runtime():
@@ -203,6 +205,10 @@ class PrintStyle:
     @staticmethod
     def hint(*args, sep=" ", end="\n", flush=True):
         prefixed = PrintStyle._prefixed_args("Hint", args)
+        _structured_logger.info(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "hint"},
+        )
         PrintStyle(font_color="#6C3483", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
         )
@@ -210,6 +216,10 @@ class PrintStyle:
     @staticmethod
     def info(*args, sep=" ", end="\n", flush=True):
         prefixed = PrintStyle._prefixed_args("Info", args)
+        _structured_logger.info(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "info"},
+        )
         PrintStyle(font_color="#0000FF", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
         )
@@ -217,6 +227,10 @@ class PrintStyle:
     @staticmethod
     def success(*args, sep=" ", end="\n", flush=True):
         prefixed = PrintStyle._prefixed_args("Success", args)
+        _structured_logger.info(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "success"},
+        )
         PrintStyle(font_color="#008000", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
         )
@@ -224,6 +238,10 @@ class PrintStyle:
     @staticmethod
     def warning(*args, sep=" ", end="\n", flush=True):
         prefixed = PrintStyle._prefixed_args("Warning", args)
+        _structured_logger.warning(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "warning"},
+        )
         PrintStyle(font_color="#FFA500", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
         )
@@ -238,6 +256,10 @@ class PrintStyle:
         except Exception:
             # If runtime detection fails, default to emitting to avoid hiding logs during development setup
             pass
+        _structured_logger.debug(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "debug"},
+        )
         prefixed = PrintStyle._prefixed_args("Debug", args)
         PrintStyle(font_color="#808080", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
@@ -246,6 +268,10 @@ class PrintStyle:
     @staticmethod
     def error(*args, sep=" ", end="\n", flush=True):
         prefixed = PrintStyle._prefixed_args("Error", args)
+        _structured_logger.error(
+            PrintStyle._format_args(args, sep),
+            extra={"source": "app", "category": "error"},
+        )
         PrintStyle(font_color="red", padding=True).print(
             *prefixed, sep=sep, end=end, flush=flush
         )

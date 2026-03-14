@@ -87,6 +87,11 @@ class SchedulerTaskUpdate(ApiHandler):
         # Use atomic update method to apply changes
         updated_task = await scheduler.update_task(task_id, **update_params)
 
+        if updated_task and isinstance(updated_task, ScheduledTask):
+            from python.helpers.autonomy_scheduler import AutonomyScheduler
+
+            AutonomyScheduler.get().sync_scheduled_tasks()
+
         if not updated_task:
             return {
                 "error": f"Task with ID {task_id} not found or could not be updated"

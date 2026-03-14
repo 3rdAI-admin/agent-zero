@@ -95,11 +95,26 @@ class DeferredTask:
         self.children: list[ChildTask] = []
 
     def start_task(
-        self, func: Callable[..., Coroutine[Any, Any, Any]], *args: Any, **kwargs: Any
+        self,
+        func: Callable[..., Coroutine[Any, Any, Any]],
+        *args: Any,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
     ):
+        """Start an async task in the background thread.
+
+        Args:
+            func: Async callable to run.
+            *args: Positional arguments for *func*.
+            timeout: Optional timeout budget in seconds.  When set, the task
+                is cancelled if it exceeds this duration.  The timeout uses
+                ``asyncio.wait_for`` semantics (cancel, not detach).
+            **kwargs: Keyword arguments for *func*.
+        """
         self.func = func
         self.args = args
         self.kwargs = kwargs
+        self._timeout = timeout
         self._start_task()
         return self
 
@@ -116,7 +131,10 @@ class DeferredTask:
         self.kill_children()
 
     async def _run(self):
-        return await self.func(*self.args, **self.kwargs)
+        coro = self.func(*self.args, **self.kwargs)
+        if self._timeout is not None:
+            return await asyncio.wait_for(coro, timeout=self._timeout)
+        return await coro
 
     def is_ready(self) -> bool:
         return self._future.done() if self._future else False

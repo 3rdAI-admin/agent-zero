@@ -1,4 +1,5 @@
 from datetime import timedelta
+import hmac
 import os
 import secrets
 import ssl
@@ -12,12 +13,27 @@ import asyncio
 import urllib.request
 import urllib.error
 import uvicorn
-from flask import Flask, request, Response, session, redirect, url_for, render_template_string
+from flask import (
+    Flask,
+    request,
+    Response,
+    session,
+    redirect,
+    url_for,
+    render_template_string,
+)
 from werkzeug.wrappers.response import Response as BaseResponse
 from werkzeug.wrappers.request import Request as WerkzeugRequest
 
 import initialize
-from python.helpers import files, git, mcp_server, fasta2a_server, settings as settings_helper
+from python.helpers import (
+    files,
+    git,
+    mcp_server,
+    fasta2a_server,
+    settings as settings_helper,
+    startup_state as startup_state_helper,
+)
 from python.helpers.files import get_abs_path
 from python.helpers import runtime, dotenv, process
 from python.helpers.websocket import WebSocketHandler, validate_ws_origin
@@ -35,14 +51,98 @@ from python.helpers.websocket_namespace_discovery import discover_websocket_name
 
 # disable logging
 import logging
+import warnings
+
 logging.getLogger().setLevel(logging.WARNING)
+
+# Suppress upstream deprecation warnings that we cannot fix:
+# - litellm uses Pydantic .dict() (deprecated in V2, removed in V3)
+# - faiss imports numpy.core._multiarray_umath (renamed to numpy._core)
+# - SWIG modules lack __module__ attribute (faiss compiled extension)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*The `dict` method is deprecated.*",
+    category=DeprecationWarning,
+)
+warnings.filterwarnings(
+    "ignore", message=r".*numpy\.core\._multiarray_umath.*", category=DeprecationWarning
+)
+warnings.filterwarnings(
+    "ignore", message=r".*builtin type Swig.*", category=DeprecationWarning
+)
+warnings.filterwarnings(
+    "ignore", message=r".*builtin type swigvarlink.*", category=DeprecationWarning
+)
+
+
+class _HealthCheckAccessLogFilter(logging.Filter):
+    """Suppress access log lines for GET /health 200 to reduce log noise from Docker healthcheck."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Reason: uvicorn's AccessFormatter produces args as a tuple:
+        # (client_addr, method, path, http_version, status_code).
+        # Check args directly for reliable matching (status_code is int 200).
+        args = getattr(record, "args", None)
+        if isinstance(args, tuple) and len(args) >= 5:
+            path = args[2] if len(args) > 2 else ""
+            status = args[4] if len(args) > 4 else 0
+            if path == "/health" and status == 200:
+                return False
+        return True
+
+
+class _InvalidHTTPRequestFilter(logging.Filter):
+    """Suppress 'Invalid HTTP request received' warnings from probes/scanners.
+
+    Reason: Docker healthcheck, port scanners, and monitoring tools sometimes send
+    non-HTTP traffic to the uvicorn port. These are expected and harmless but generate
+    WARNING log lines via uvicorn.error (h11_impl.py / httptools_impl.py). Suppressing
+    them reduces log noise without hiding real errors.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.WARNING:
+            msg = record.getMessage()
+            if "Invalid HTTP request received" in msg:
+                return False
+        return True
+
+
+class _FilteredUvicornServer(uvicorn.Server):
+    """Uvicorn server that installs health filter and redirects access logs AFTER startup.
+
+    Reason: uvicorn's startup() calls config.configure_logging() which resets all
+    logger handlers/filters. Filters added before .run() get wiped. This subclass
+    installs the filter after configure_logging() completes. It also redirects
+    access logs from stdout to stderr so they don't interleave with agent streaming
+    JSON output (which uses stdout), preventing byte-level corruption (issue #21).
+    """
+
+    async def startup(self, sockets: list | None = None) -> None:
+        await super().startup(sockets=sockets)
+        access_logger = logging.getLogger("uvicorn.access")
+        # Install health check filter (fixes #20)
+        access_logger.addFilter(_HealthCheckAccessLogFilter())
+        # Redirect access log from stdout to stderr to prevent interleaving
+        # with agent streaming output on stdout (fixes #21).
+        import sys
+
+        for handler in access_logger.handlers:
+            if (
+                isinstance(handler, logging.StreamHandler)
+                and handler.stream is sys.stdout
+            ):
+                handler.stream = sys.stderr
+        # Suppress "Invalid HTTP request received" warnings from probes (fixes #12)
+        error_logger = logging.getLogger("uvicorn.error")
+        error_logger.addFilter(_InvalidHTTPRequestFilter())
 
 
 # Set the new timezone to 'UTC'
 os.environ["TZ"] = "UTC"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Apply the timezone change
-if hasattr(time, 'tzset'):
+if hasattr(time, "tzset"):
     time.tzset()
 
 # initialize the internal Flask server
@@ -57,12 +157,17 @@ WerkzeugRequest.max_form_memory_size = UPLOAD_LIMIT_BYTES
 
 webapp.config.update(
     JSON_SORT_KEYS=False,
-    SESSION_COOKIE_NAME="session_" + runtime.get_runtime_id(),  # bind the session cookie name to runtime id to prevent session collision on same host
+    SESSION_COOKIE_NAME="session_"
+    + runtime.get_runtime_id(),  # bind the session cookie name to runtime id to prevent session collision on same host
     SESSION_COOKIE_SAMESITE="Strict",
     SESSION_PERMANENT=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=1),
-    MAX_CONTENT_LENGTH=int(os.getenv("FLASK_MAX_CONTENT_LENGTH", str(UPLOAD_LIMIT_BYTES))),
-    MAX_FORM_MEMORY_SIZE=int(os.getenv("FLASK_MAX_FORM_MEMORY_SIZE", str(UPLOAD_LIMIT_BYTES))),
+    MAX_CONTENT_LENGTH=int(
+        os.getenv("FLASK_MAX_CONTENT_LENGTH", str(UPLOAD_LIMIT_BYTES))
+    ),
+    MAX_FORM_MEMORY_SIZE=int(
+        os.getenv("FLASK_MAX_FORM_MEMORY_SIZE", str(UPLOAD_LIMIT_BYTES))
+    ),
 )
 
 lock = threading.RLock()
@@ -74,16 +179,13 @@ socketio_server = socketio.AsyncServer(
     logger=False,
     engineio_logger=False,
     ping_interval=25,  # explicit default to avoid future lib changes
-    ping_timeout=20,   # explicit default to avoid future lib changes
+    ping_timeout=20,  # explicit default to avoid future lib changes
     max_http_buffer_size=50 * 1024 * 1024,
 )
 
 websocket_manager = WebSocketManager(socketio_server, lock)
-_settings = settings_helper.get_settings()
-settings_helper.set_runtime_settings_snapshot(_settings)
-websocket_manager.set_server_restart_broadcast(
-    _settings.get("websocket_server_restart_enabled", True)
-)
+_settings: settings_helper.Settings | None = None
+startup_state = startup_state_helper.StartupState()
 
 # Set up basic authentication for UI and API but not MCP
 # basic_auth = BasicAuth(webapp)
@@ -93,7 +195,8 @@ def is_loopback_address(address):
     loopback_checker = {
         socket.AF_INET: lambda x: (
             struct.unpack("!I", socket.inet_aton(x))[0] >> (32 - 8)
-        ) == 127,
+        )
+        == 127,
         socket.AF_INET6: lambda x: x == "::1",
     }
     address_type = "hostname"
@@ -128,6 +231,7 @@ def requires_api_key(f):
     async def decorated(*args, **kwargs):
         # Use the auth token from settings (same as MCP server)
         from python.helpers.settings import get_settings
+
         valid_api_key = get_settings()["mcp_server_token"]
 
         if api_key := request.headers.get("X-API-KEY"):
@@ -168,8 +272,8 @@ def requires_auth(f):
         if not user_pass_hash:
             return await f(*args, **kwargs)
 
-        if session.get('authentication') != user_pass_hash:
-            return redirect(url_for('login_handler'))
+        if session.get("authentication") != user_pass_hash:
+            return redirect(url_for("login_handler"))
 
         return await f(*args, **kwargs)
 
@@ -192,17 +296,26 @@ def csrf_protect(f):
 
 @webapp.route("/login", methods=["GET", "POST"])
 async def login_handler():
-    error = None
-    if request.method == 'POST':
-        user = dotenv.get_dotenv_value("AUTH_LOGIN")
-        password = dotenv.get_dotenv_value("AUTH_PASSWORD")
+    if not login.is_login_required():
+        return redirect(url_for("serve_index"))
 
-        if request.form['username'] == user and request.form['password'] == password:
-            session['authentication'] = login.get_credentials_hash()
-            return redirect(url_for('serve_index'))
+    error = None
+    if request.method == "POST":
+        user = dotenv.get_dotenv_value("AUTH_LOGIN") or ""
+        password = dotenv.get_dotenv_value("AUTH_PASSWORD") or ""
+        username = request.form.get("username", "")
+        submitted_password = request.form.get("password", "")
+
+        if (
+            user
+            and username == user
+            and hmac.compare_digest(submitted_password, password)
+        ):
+            session["authentication"] = login.get_credentials_hash()
+            return redirect(url_for("serve_index"))
         else:
             await asyncio.sleep(1)
-            error = 'Invalid Credentials. Please try again.'
+            error = "Invalid Credentials. Please try again."
 
     login_page_content = files.read_file("webui/login.html")
     return render_template_string(login_page_content, error=error)
@@ -210,14 +323,23 @@ async def login_handler():
 
 @webapp.route("/logout")
 async def logout_handler():
-    session.pop('authentication', None)
-    return redirect(url_for('login_handler'))
+    session.pop("authentication", None)
+    if not login.is_login_required():
+        return redirect(url_for("serve_index"))
+    return redirect(url_for("login_handler"))
 
 
 # Health check: no auth so Docker/scripts get 200 instead of 302
 @webapp.route("/health", methods=["GET"])
 def health():
     return Response("ok", status=200, mimetype="text/plain")
+
+
+@webapp.route("/ready", methods=["GET"])
+def ready():
+    is_ready, phases = startup_state.ready()
+    status_code = 200 if is_ready else 503
+    return {"ready": is_ready, "phases": phases}, status_code
 
 
 # handle default address, load index
@@ -271,7 +393,8 @@ def configure_websocket_namespaces(
     handlers_by_namespace: dict[str, list[WebSocketHandler]],
 ) -> set[str]:
     namespace_map: dict[str, list[WebSocketHandler]] = {
-        namespace: list(handlers) for namespace, handlers in handlers_by_namespace.items()
+        namespace: list(handlers)
+        for namespace, handlers in handlers_by_namespace.items()
     }
 
     # Always include the reserved root namespace. It is unhandled for application events by
@@ -342,9 +465,17 @@ def configure_websocket_namespaces(
                     credentials_hash = login.get_credentials_hash()
                     if credentials_hash:
                         if session.get("authentication") != credentials_hash:
-                            PrintStyle.warning(
-                                f"WebSocket authentication failed for {_namespace} {sid}: session not valid"
-                            )
+                            # Check if session exists before deciding log level
+                            # No session = expected for pre-login clients (healthcheck, browser pre-auth)
+                            # Invalid session = unexpected, needs investigation
+                            if not session.get("authentication"):
+                                PrintStyle.debug(
+                                    f"WebSocket authentication failed for {_namespace} {sid}: no session (expected for pre-login clients)"
+                                )
+                            else:
+                                PrintStyle.warning(
+                                    f"WebSocket authentication failed for {_namespace} {sid}: session not valid"
+                                )
                             return False
                     else:
                         PrintStyle.debug(
@@ -417,10 +548,18 @@ def configure_websocket_namespaces(
 
 
 def run():
+    global _settings
     PrintStyle().print("Initializing framework...")
 
     # migrate data before anything else
     initialize.initialize_migration()
+
+    # Snapshot effective runtime settings only after migration/runtime init.
+    _settings = settings_helper.get_settings()
+    settings_helper.set_runtime_settings_snapshot(_settings)
+    websocket_manager.set_server_restart_broadcast(
+        _settings.get("websocket_server_restart_enabled", True)
+    )
 
     # # Suppress only request logs but keep the startup messages
     # from werkzeug.serving import WSGIRequestHandler
@@ -467,7 +606,9 @@ def run():
     for handler in handlers:
         register_api_handler(webapp, handler)
 
-    handlers_by_namespace = _build_websocket_handlers_by_namespace(socketio_server, lock)
+    handlers_by_namespace = _build_websocket_handlers_by_namespace(
+        socketio_server, lock
+    )
     configure_websocket_namespaces(
         webapp=webapp,
         socketio_server=socketio_server,
@@ -493,6 +634,7 @@ def run():
         TODO(dev): add cleanup + flush-to-disk logic here.
         """
         return
+
     flush_ran = False
 
     def _run_flush(reason: str) -> None:
@@ -511,10 +653,14 @@ def run():
     ssl_keyfile = None
     cert_file = "/etc/ssl/agent-zero/server.crt"
     key_file = "/etc/ssl/agent-zero/server.key"
-    http_only = os.environ.get("AGENT_ZERO_HTTP_ONLY", "").strip().lower() in ("1", "true", "yes")
+    http_only = os.environ.get("AGENT_ZERO_HTTP_ONLY", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     if http_only:
         scheme = "http"
-        PrintStyle().debug(f"TLS disabled via AGENT_ZERO_HTTP_ONLY")
+        PrintStyle().debug("TLS disabled via AGENT_ZERO_HTTP_ONLY")
     elif os.path.isfile(cert_file) and os.path.isfile(key_file):
         ssl_certfile = cert_file
         ssl_keyfile = key_file
@@ -527,12 +673,12 @@ def run():
         host=host,
         port=port,
         log_level="info",
-        access_log=_settings.get("uvicorn_access_logs_enabled", False),
+        access_log=(_settings or {}).get("uvicorn_access_logs_enabled", False),
         ws="wsproto",
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
     )
-    server = uvicorn.Server(config)
+    server = _FilteredUvicornServer(config)
 
     class _UvicornServerWrapper:
         def __init__(self, server: uvicorn.Server):
@@ -545,7 +691,9 @@ def run():
     process.set_server(_UvicornServerWrapper(server))
 
     PrintStyle().debug(f"Starting server at {scheme}://{host}:{port} ...")
-    threading.Thread(target=wait_for_health, args=(host, port, scheme), daemon=True).start()
+    threading.Thread(
+        target=wait_for_health, args=(host, port, scheme), daemon=True
+    ).start()
     try:
         server.run()
     finally:
@@ -565,27 +713,91 @@ def wait_for_health(host: str, port: int, scheme: str = "http"):
         try:
             with urllib.request.urlopen(url, timeout=2, context=ctx) as resp:
                 if resp.status == 200:
-                    PrintStyle().print("Agent Zero is running.")
+                    PrintStyle().print("Agent Zero is live.")
                     return
         except Exception:
             pass
         time.sleep(1)
 
 
+def _watch_task(
+    name: str,
+    task,
+    *,
+    required: bool,
+    success_detail: str,
+    failure_detail: str,
+) -> None:
+    def _wait_for_result() -> None:
+        startup_state.mark_running(name, required=required)
+        try:
+            task.result_sync()
+            startup_state.mark_ready(name, detail=success_detail)
+        except Exception as e:
+            startup_state.mark_failed(name, error=str(e), detail=failure_detail)
+
+    threading.Thread(target=_wait_for_result, daemon=True).start()
+
+
+def _mcp_is_required() -> bool:
+    override = os.environ.get("A0_READY_REQUIRE_MCP", "").strip().lower()
+    return override in ("1", "true", "yes")
+
+
 def init_a0():
+    startup_state.reset()
+    startup_state.mark_running(
+        "migration", required=True, detail="Applying migrations and reloading settings."
+    )
+    startup_state.mark_ready("migration", detail="Migrations completed.")
+
     # initialize contexts and MCP
     init_chats = initialize.initialize_chats()
+    startup_state.mark_running(
+        "chat_restore", required=True, detail="Loading saved chats."
+    )
+    _watch_task(
+        "chat_restore",
+        init_chats,
+        required=True,
+        success_detail="Saved chats restored.",
+        failure_detail="Chat restore failed.",
+    )
     # wait for chat load with timeout so a slow/corrupt tmp/chats does not block forever
     try:
         init_chats.result_sync(timeout=60)
     except TimeoutError:
-        PrintStyle().print("Warning: loading saved chats timed out after 60s; continuing without them.")
+        startup_state.update_detail(
+            "chat_restore",
+            detail="Still restoring chats after 60s; startup continues in degraded mode.",
+        )
+        PrintStyle().print(
+            "Warning: loading saved chats timed out after 60s; continuing without them."
+        )
 
-    initialize.initialize_mcp()
+    init_mcp = initialize.initialize_mcp()
+    _watch_task(
+        "mcp_init",
+        init_mcp,
+        required=_mcp_is_required(),
+        success_detail="MCP initialization completed.",
+        failure_detail=(
+            "MCP initialization failed. This is informational unless "
+            "A0_READY_REQUIRE_MCP=1 is set."
+        ),
+    )
     # start job loop
     initialize.initialize_job_loop()
+    startup_state.mark_ready("job_loop", detail="Job loop started.")
     # preload
-    initialize.initialize_preload()
+    init_preload = initialize.initialize_preload()
+    _watch_task(
+        "preload",
+        init_preload,
+        required=False,
+        success_detail="Preload completed.",
+        failure_detail="Preload failed.",
+    )
 
 
 # run the internal server

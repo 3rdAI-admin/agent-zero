@@ -149,6 +149,15 @@ You have successfully set up a complete Agent Zero development environment! You 
 
 You're now ready to contribute to Agent Zero, create custom extensions, or modify the framework to suit your needs. Happy coding!
 
+## Testing and verification
+
+Before pushing changes, run the verification script (pytest + ruff, same as CI):
+
+```bash
+./scripts/testing/verify-e2e-fixes.sh
+```
+
+CI runs this automatically on push and pull requests to `main`/`master`. For full E2E (browser, login, main UI), use the `/e2e-test` command and see the [Testing and CI](../guides/TESTING_AND_CI.md) guide.
 
 ## Next steps
 - See [extensions](../developer/extensions.md) for instructions on how to create custom extensions.

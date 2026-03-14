@@ -22,5 +22,10 @@ apt-get update > /dev/null 2>&1 &
 # Generate self-signed SSL cert for HTTPS (enables browser microphone access)
 bash /exe/generate_ssl_cert.sh
 
+# Recreate runtime state under tmpfs-backed paths before supervisor starts.
+# Reason: compose hardening mounts /tmp, /run, /var/run, and /var/log as tmpfs.
+mkdir -p /var/log/nginx /var/log/supervisor /var/run/sshd /run /var/run /tmp/.X11-unix
+chmod 1777 /tmp /tmp/.X11-unix
+
 # let supervisord handle the services
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

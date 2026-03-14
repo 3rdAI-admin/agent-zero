@@ -23,9 +23,10 @@ class MemorizeMemories(Extension):
             heading="Memorizing new information...",
         )
 
-        # memorize in background
+        # memorize in background with a bounded timeout budget so a stalled
+        # utility model cannot hang this background task indefinitely
         task = DeferredTask(thread_name=THREAD_BACKGROUND)
-        task.start_task(self.memorize, loop_data, log_item)
+        task.start_task(self.memorize, loop_data, log_item, timeout=120)
         # task = asyncio.create_task(self.memorize(loop_data, log_item))
         return task
 

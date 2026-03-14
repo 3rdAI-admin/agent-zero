@@ -1,6 +1,5 @@
 ---
-agent: agent
-description: Validate Agent Zero codebase (project-specific)
+description: Comprehensive validation for Agent Zero codebase (project-specific)
 mode: normal
 ---
 
@@ -73,6 +72,8 @@ This checks: container health, Web UI, supervisor services (run_ui, xvfb, fluxbo
 ## Summary
 
 Report results for each phase: **Pass**, **Fail**, or **Skipped** (with reason). If all runnable phases pass, state: "All validation passed. Ready for deployment or next steps."
+
+**Note:** Full validation (including mypy and `./scripts/testing/validate.sh`) is run locally when the Docker stack is up. CI (`.github/workflows/verify-e2e-fixes.yml`) runs pytest + ruff only on push/PR.
 
 ## Journal Entry (required after validation)
 

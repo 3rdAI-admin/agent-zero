@@ -123,6 +123,7 @@ class Settings(TypedDict):
     memory_memorize_enabled: bool
     memory_memorize_consolidation: bool
     memory_memorize_replace_threshold: float
+    memory_backend: str  # "faiss" (default) or "sqlite"
 
     api_keys: dict[str, str]
 
@@ -360,18 +361,19 @@ def convert_out(settings: Settings) -> SettingsOutput:
         out["settings"]["secrets"] = ""
 
     # mask API keys before sending to frontend
-    if isinstance(out["settings"].get("api_keys"), dict):
-        for provider, value in list(out["settings"]["api_keys"].items()):
+    out_dict = cast(dict[str, Any], out["settings"])
+    if isinstance(out_dict.get("api_keys"), dict):
+        for provider, value in list(out_dict["api_keys"].items()):
             if value:
-                out["settings"]["api_keys"][provider] = API_KEY_PLACEHOLDER
+                out_dict["api_keys"][provider] = API_KEY_PLACEHOLDER
 
     # normalize certain fields
-    for key, value in list(out["settings"].items()):
+    for key, value in list(out_dict.items()):
         # convert kwargs dicts to .env format
         if (key.endswith("_kwargs") or key == "browser_http_headers") and isinstance(
             value, dict
         ):
-            out["settings"][key] = _dict_to_env(value)
+            out_dict[key] = _dict_to_env(value)
     return out
 
 
@@ -388,16 +390,18 @@ def _get_api_key_field(settings: Settings, provider: str, title: str) -> Setting
 
 def convert_in(settings: Settings) -> Settings:
     current = get_settings()
+    current_dict = cast(dict[str, Any], current)
+    settings_dict = cast(dict[str, Any], settings)
 
-    for key, value in settings.items():
+    for key, value in settings_dict.items():
         # Special handling for browser_http_headers and *_kwargs (stored as .env text)
         if (key == "browser_http_headers" or key.endswith("_kwargs")) and isinstance(
             value, str
         ):
-            current[key] = _env_to_dict(value)
+            current_dict[key] = _env_to_dict(value)
             continue
 
-        current[key] = value
+        current_dict[key] = value
     return current
 
 
@@ -441,35 +445,37 @@ def set_settings_delta(delta: dict, apply: bool = True):
 
 def merge_settings(original: Settings, delta: dict) -> Settings:
     merged = original.copy()
-    merged.update(delta)
+    cast(dict[str, Any], merged).update(delta)
     return merged
 
 
 def normalize_settings(settings: Settings) -> Settings:
     copy = settings.copy()
     default = get_default_settings()
+    copy_dict = cast(dict[str, Any], copy)
+    default_dict = cast(dict[str, Any], default)
 
     # adjust settings values to match current version if needed
-    if "version" not in copy or copy["version"] != default["version"]:
+    if "version" not in copy_dict or copy_dict["version"] != default_dict["version"]:
         _adjust_to_version(copy, default)
-        copy["version"] = default["version"]  # sync version
+        copy_dict["version"] = default_dict["version"]  # sync version
 
     # remove keys that are not in default
-    keys_to_remove = [key for key in copy if key not in default]
+    keys_to_remove = [key for key in copy_dict if key not in default_dict]
     for key in keys_to_remove:
-        del copy[key]
+        del copy_dict[key]
 
     # add missing keys and normalize types
-    for key, value in default.items():
-        if key not in copy:
-            copy[key] = value
+    for key, value in default_dict.items():
+        if key not in copy_dict:
+            copy_dict[key] = value
         else:
             try:
-                copy[key] = type(value)(copy[key])  # type: ignore
-                if isinstance(copy[key], str):
-                    copy[key] = copy[key].strip()  # strip strings
+                copy_dict[key] = type(value)(copy_dict[key])
+                if isinstance(copy_dict[key], str):
+                    copy_dict[key] = copy_dict[key].strip()  # strip strings
             except (ValueError, TypeError):
-                copy[key] = value  # make default instead
+                copy_dict[key] = value  # make default instead
 
     # mcp server token is set automatically
     copy["mcp_server_token"] = create_auth_token()
@@ -517,6 +523,7 @@ def _read_settings_file() -> Settings | None:
         content = files.read_file(SETTINGS_FILE)
         parsed = json.loads(content)
         return normalize_settings(parsed)
+    return None
 
 
 def _write_settings_file(settings: Settings):
@@ -567,23 +574,19 @@ def get_default_settings() -> Settings:
     return Settings(
         version=_get_version(),
         chat_model_provider=get_default_value("chat_model_provider", "venice"),
-        chat_model_name=get_default_value(
-            "chat_model_name", "mistral-31-24b"
-        ),
+        chat_model_name=get_default_value("chat_model_name", "mistral-31-24b"),
         chat_model_api_base=get_default_value("chat_model_api_base", ""),
         chat_model_kwargs=get_default_value("chat_model_kwargs", {}),
-        chat_model_ctx_length=get_default_value("chat_model_ctx_length", 100000),
+        chat_model_ctx_length=get_default_value("chat_model_ctx_length", 128000),
         chat_model_ctx_history=get_default_value("chat_model_ctx_history", 0.7),
         chat_model_vision=get_default_value("chat_model_vision", True),
         chat_model_rl_requests=get_default_value("chat_model_rl_requests", 0),
         chat_model_rl_input=get_default_value("chat_model_rl_input", 0),
         chat_model_rl_output=get_default_value("chat_model_rl_output", 0),
         util_model_provider=get_default_value("util_model_provider", "venice"),
-        util_model_name=get_default_value(
-            "util_model_name", "qwen3-4b"
-        ),
+        util_model_name=get_default_value("util_model_name", "qwen3-4b"),
         util_model_api_base=get_default_value("util_model_api_base", ""),
-        util_model_ctx_length=get_default_value("util_model_ctx_length", 100000),
+        util_model_ctx_length=get_default_value("util_model_ctx_length", 32000),
         util_model_ctx_input=get_default_value("util_model_ctx_input", 0.7),
         util_model_kwargs=get_default_value("util_model_kwargs", {}),
         util_model_rl_requests=get_default_value("util_model_rl_requests", 0),
@@ -597,12 +600,8 @@ def get_default_settings() -> Settings:
         embed_model_kwargs=get_default_value("embed_model_kwargs", {}),
         embed_model_rl_requests=get_default_value("embed_model_rl_requests", 0),
         embed_model_rl_input=get_default_value("embed_model_rl_input", 0),
-        browser_model_provider=get_default_value(
-            "browser_model_provider", "venice"
-        ),
-        browser_model_name=get_default_value(
-            "browser_model_name", "mistral-31-24b"
-        ),
+        browser_model_provider=get_default_value("browser_model_provider", "venice"),
+        browser_model_name=get_default_value("browser_model_name", "mistral-31-24b"),
         browser_model_api_base=get_default_value("browser_model_api_base", ""),
         browser_model_vision=get_default_value("browser_model_vision", True),
         browser_model_rl_requests=get_default_value("browser_model_rl_requests", 0),
@@ -638,6 +637,7 @@ def get_default_settings() -> Settings:
         memory_memorize_replace_threshold=get_default_value(
             "memory_memorize_replace_threshold", 0.9
         ),
+        memory_backend=get_default_value("memory_backend", "faiss"),
         api_keys={},
         auth_login="",
         auth_password="",
@@ -674,8 +674,24 @@ def get_default_settings() -> Settings:
         stt_silence_duration=get_default_value("stt_silence_duration", 1000),
         stt_waiting_timeout=get_default_value("stt_waiting_timeout", 2000),
         tts_kokoro=get_default_value("tts_kokoro", True),
-        mcp_servers=get_default_value("mcp_servers", '{\n    "mcpServers": {}\n}'),
-        mcp_client_init_timeout=get_default_value("mcp_client_init_timeout", 10),
+        mcp_servers=get_default_value(
+            "mcp_servers",
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "google_workspace": {
+                            "description": "Gmail, Drive, Docs, Sheets, Calendar, Tasks (container)",
+                            "url": "http://workspace_mcp:8889/mcp",
+                            "type": "streamable-http",
+                            "init_timeout": 30,
+                            "tool_timeout": 120,
+                        }
+                    }
+                },
+                indent=2,
+            ),
+        ),
+        mcp_client_init_timeout=get_default_value("mcp_client_init_timeout", 30),
         mcp_client_tool_timeout=get_default_value("mcp_client_tool_timeout", 120),
         mcp_server_enabled=get_default_value("mcp_server_enabled", False),
         mcp_server_token=create_auth_token(),

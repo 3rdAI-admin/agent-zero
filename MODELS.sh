@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Switch Agent Zero model settings between Anthropic, Venice.ai, Agent Zero API, DeepSeek, or Ollama.
+# Switch Agent Zero model settings between Google Gemini, Anthropic, Venice.ai, Agent Zero API, DeepSeek, or Ollama.
 # Usage: ./MODELS.sh <preset> [--test-llm]  or  ./MODELS.sh --status
 #   --test-llm  Optional: run a minimal LLM call to confirm the model responds.
 #
@@ -43,6 +43,8 @@ if [[ -z "$PRESET" ]]; then
   echo "Usage: $0 <preset> [--test-llm]"
   echo ""
   echo "Presets:"
+  echo "  google       Chat/Utility/Browser -> Google Gemini 2.5 Flash (1M context, free tier)"
+  echo "  google-pro   Chat -> Gemini 2.5 Pro, Utility/Browser -> Gemini 2.5 Flash"
   echo "  anthropic    Chat/Utility/Browser -> Anthropic (Claude)"
   echo "  venice       Chat/Utility/Browser -> Venice.ai direct (mistral-31-24b, qwen3-4b)"
   echo "  agent-zero   Chat/Utility/Browser -> Agent Zero API (llm.agent-zero.ai/v1, mistral-31-24b, qwen3-4b, temp 0.2)"
@@ -52,11 +54,13 @@ if [[ -z "$PRESET" ]]; then
   echo "  ollama-glm   Chat/Browser -> GLM-4.7-Flash (30B MoE, 73.8% SWE-bench), Utility -> gpt-oss:20b"
   echo "  ollama-qwen3 Chat/Browser -> Qwen3-Coder:30b (30B MoE, agentic-trained), Utility -> gpt-oss:20b"
   echo "  ollama-mixed  Chat -> GLM-4.7-Flash, Browser -> devstral-small-2 (384K, vision), Utility -> gpt-oss:20b"
-  echo "  ollama-claude Chat/Browser -> Qwen3-14B Claude Opus 4.5 distill (9GB), Utility -> gpt-oss:20b"
+  echo "  ollama-baz   Chat/Utility/Browser -> Qwen3-14B Claude Opus 4.5 distill (all roles, 9GB)"
   echo "  ollama-glm-claude Chat/Browser -> GLM-4.7-Flash (fast MoE), Utility -> Qwen3-14B Claude distill"
   echo ""
   echo "All Ollama presets include anti-repetition kwargs (repeat_penalty 1.3, max_tokens 4096,"
-  echo "temperature 0.4 chat / 0.2 browser+util) via LiteLLM OpenAI-compat param mapping."
+  echo "temperature 0.4 chat / 0.2 browser+util) and num_ctx context window limits:"
+  echo "  <= 3B params: num_ctx=4096 | 4-8B: 8192 | 9-30B: 16384 | >30B: 8192"
+  echo "This prevents Ollama from allocating oversized KV caches that stall inference."
   echo ""
   echo "Optional: --test-llm  Run a short LLM call to verify the model responds."
   echo ""
@@ -68,7 +72,7 @@ PRESET_LOWER="$(echo "$PRESET" | tr '[:upper:]' '[:lower:]')"
 # Normalize for Python script (preset keys use underscores)
 PRESET_LOWER="${PRESET_LOWER//-/_}"
 case "$PRESET_LOWER" in
-  anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_claude|ollama_glm_claude) ;;
+  google|google_pro|anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_baz|ollama_glm_claude) ;;
   *)
     echo "Error: unknown preset '$PRESET'. Run without arguments to see available presets."
     exit 2
@@ -103,6 +107,7 @@ if [[ $EXIT -eq 0 ]]; then
 else
   echo "Status: Preset '$PRESET_LOWER' applied; verification reported issues (see above)."
 fi
+echo "Google        -> set GEMINI_API_KEY (same as GOOGLE_API_KEY) in .env."
 echo "Venice.ai     -> set Venice.ai key in Settings → API Keys or API_KEY_VENICE in .env."
 echo "Agent Zero    -> set Agent Zero API key (sk-a0-...) in Settings → API Keys or API_KEY_A0_VENICE."
 echo "Anthropic     -> set API_KEY_ANTHROPIC."

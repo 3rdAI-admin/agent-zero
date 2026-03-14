@@ -8,15 +8,15 @@
 
 ### Autonomy (when)
 
-- [ ] **AUTON-01** — Agent can run on a schedule (cron-like or interval); jobs persist across container restarts (e.g. APScheduler + SQLite job store).
-- [ ] **AUTON-02** — Agent can be triggered by events (e.g. webhook, queue message, or internal event); trigger source is configurable.
-- [ ] **AUTON-03** — Agent can process a goal queue (explicit tasks/goals enqueued by user or system); executor runs same agent loop regardless of trigger type.
+- [x] **AUTON-01** — Agent can run on a schedule (cron-like or interval); jobs persist across container restarts (e.g. APScheduler + SQLite job store).
+- [x] **AUTON-02** — Agent can be triggered by events (e.g. webhook, queue message, or internal event); trigger source is configurable.
+- [x] **AUTON-03** — Agent can process a goal queue (explicit tasks/goals enqueued by user or system); executor runs same agent loop regardless of trigger type.
 
 ### Autonomy (how) — Host control
 
-- [ ] **AUTON-04** — Agent can run shell commands and tools within safety bounds (allowlist or sandbox); no per-step human approval for routine actions.
-- [ ] **AUTON-05** — Agent can use GUI (VNC/browser) for tasks within the same safety bounds; actions are audited (e.g. append-only log).
-- [ ] **AUTON-06** — Bounded host control is configurable (allowlist, deny list, or sandbox policy); agent cannot disable or bypass safety configuration.
+- [x] **AUTON-04** — Agent can run shell commands and tools within safety bounds (allowlist or sandbox); no per-step human approval for routine actions.
+- [x] **AUTON-05** — Agent can use GUI (VNC/browser) for tasks within the same safety bounds; actions are audited (e.g. append-only log).
+- [x] **AUTON-06** — Bounded host control is configurable (allowlist, deny list, or sandbox policy); agent cannot disable or bypass safety configuration.
 
 ### Self-modification (safety)
 
@@ -44,9 +44,9 @@
 
 ### Safety & guardrails
 
-- [ ] **SAFETY-01** — Autonomous runs have configurable budgets (time, tool calls, tokens, or cost); agent cannot disable budgets.
-- [ ] **SAFETY-02** — Kill switch or pause: user or system can stop an autonomous run; intervention point cannot be removed by agent self-edit.
-- [ ] **SAFETY-03** — High-stakes and self-modification actions are logged in an append-only audit log that the agent cannot write to.
+- [x] **SAFETY-01** — Autonomous runs have configurable budgets (time, tool calls, tokens, or cost); agent cannot disable budgets.
+- [x] **SAFETY-02** — Kill switch or pause: user or system can stop an autonomous run; intervention point cannot be removed by agent self-edit.
+- [x] **SAFETY-03** — High-stakes and self-modification actions are logged in an append-only audit log that the agent cannot write to.
 
 ### Platform
 
@@ -70,7 +70,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Filled by roadmap) | | |
+| AUTON-01 | 1 | Done |
+| AUTON-02 | 1 | Done |
+| AUTON-03 | 1 | Done |
+| AUTON-04 | 2 | Open |
+| AUTON-05 | 2 | Open |
+| AUTON-06 | 2 | Open |
+| SELF-01 | 3 | Open |
+| SELF-02 | 3 | Open |
+| SELF-03 | 3 | Open |
+| SELF-04 | 3 | Open |
+| SELF-05 | 3 | Open |
+| PERS-01 | 4 | Open |
+| PERS-02 | 4 | Open |
+| PERS-03 | 4 | Open |
+| MEMORY-01 | 5 | Open (existing FAISS) |
+| MEMORY-02 | 5 | Open |
+| ZEROCLAW-01 | 5 | Open |
+| ZEROCLAW-02 | 5 | Open |
+| SAFETY-01 | 1 | Done |
+| SAFETY-02 | 1 | Done |
+| SAFETY-03 | 2 | Open |
+| PLATFORM-01 | 2 | Open |
+| PLATFORM-02 | 2 | Open |
+
+See [ROADMAP.md](./ROADMAP.md) for phase descriptions and deliverables.
 
 ---
-*Requirements defined from PROJECT.md and research; traceability updated when roadmap is created.*
+*Requirements defined from PROJECT.md and research; traceability from ROADMAP.md (2026-03-06).*

@@ -115,6 +115,42 @@ const model = {
     }
   },
 
+  async renameChat(id) {
+    const context = this.contexts.find((ctx) => ctx.id === id);
+    if (!context) {
+      toast("Chat not found.", "error");
+      return;
+    }
+
+    const currentName = context.name || `Chat #${context.no}`;
+    const nextName = window.prompt("Rename chat", currentName);
+    if (nextName === null) return;
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      toast("Chat name is required.", "error");
+      return;
+    }
+
+    try {
+      const response = await sendJsonData("/chat_rename", {
+        context: id,
+        name: trimmedName,
+      });
+
+      const savedName = response?.name || trimmedName;
+      this.contexts = this.contexts.map((ctx) =>
+        ctx.id === id ? { ...ctx, name: savedName } : ctx
+      );
+      if (this.selected === id) {
+        this.selectedContext = this.contexts.find((ctx) => ctx.id === id) || this.selectedContext;
+      }
+      justToast("Chat renamed.", "success", 1000, "chat-rename");
+    } catch (e) {
+      toastFetchError("Error renaming chat", e);
+    }
+  },
+
   // Switch from a context that's being deleted
   async switchFromContext(id) {
     // Find an alternate chat to switch to

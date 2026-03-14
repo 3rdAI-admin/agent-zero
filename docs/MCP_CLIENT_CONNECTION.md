@@ -64,6 +64,14 @@ Use a host that can reach Agent Zero:
 
 If the client runs in Docker or on another server, ensure that host can route to the Agent Zero host and port 8888.
 
+### 6. OAuth Well-Known Endpoint (404 Expected)
+
+**Symptom**: Client logs show `GET /.well-known/oauth-authorization-server HTTP/1.1" 404 Not Found`
+
+**This is expected and safe to ignore.** Agent Zero does not implement OAuth 2.0 authorization server metadata. Some MCP clients (e.g. Cursor, IDEs) probe for the `/.well-known/oauth-authorization-server` endpoint to check if OAuth is available. The 404 response is normal.
+
+**For MCP Clients**: Use token-based authentication (the `t-<TOKEN>` in the URL). Do NOT configure OAuth; it is not supported for MCP/A2A connections.
+
 ## Verify server from the host
 
 Run the test from the **same environment** where your MCP client runs (same host or same Docker/container).

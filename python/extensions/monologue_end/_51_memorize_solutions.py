@@ -23,9 +23,9 @@ class MemorizeSolutions(Extension):
             heading="Memorizing succesful solutions...",
         )
 
-        # memorize in background
+        # memorize in background with a bounded timeout budget
         task = DeferredTask(thread_name=THREAD_BACKGROUND)
-        task.start_task(self.memorize, loop_data, log_item)
+        task.start_task(self.memorize, loop_data, log_item, timeout=120)
         # task = asyncio.create_task(self.memorize(loop_data, log_item))
         return task
 

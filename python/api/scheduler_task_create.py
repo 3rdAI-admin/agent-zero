@@ -24,7 +24,8 @@ class SchedulerTaskCreate(ApiHandler):
         printer = PrintStyle(italic=True, font_color="blue", padding=False)
 
         # Get timezone from input (do not set if not provided, we then rely on poll() to set it)
-        if timezone := input.get("timezone", None):
+        timezone = input.get("timezone") or None
+        if timezone:
             Localization.get().set_timezone(timezone)
 
         scheduler = TaskScheduler.get()
@@ -150,6 +151,12 @@ class SchedulerTaskCreate(ApiHandler):
 
         # Add the task to the scheduler
         await scheduler.add_task(task)
+
+        # Phase 1: sync APScheduler so cron jobs persist across restarts
+        if isinstance(task, ScheduledTask):
+            from python.helpers.autonomy_scheduler import AutonomyScheduler
+
+            AutonomyScheduler.get().sync_scheduled_tasks()
 
         # Verify the task was added correctly - retrieve by UUID to check persistence
         saved_task = scheduler.get_task_by_uuid(task.uuid)

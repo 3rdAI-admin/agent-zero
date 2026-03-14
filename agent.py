@@ -330,6 +330,17 @@ class UserMessage:
 
 
 class LoopData:
+    """Per-turn state for the agent message loop.
+
+    Retry budget summary (all layers are bounded):
+    - LiteLLM API call: 2 retries, 1.5s delay (models.py, transient errors only)
+    - Critical exception: 1 retry, 3s delay (agent.py retry_critical_exception)
+    - Message loop: MAX_ITERATIONS cap (default 20)
+    - Tool error streak: TOOL_ERROR_STREAK_MAX consecutive failures of same tool (default 3)
+    - Subordinate agent: DEFAULT_SUBORDINATE_TIMEOUT (default 600s, call_subordinate.py)
+    - Scheduled tasks: RunBudgets.effective_timeout_seconds (task_scheduler.py)
+    """
+
     # Max message-loop iterations per user turn; prevents unbounded monologue loops
     MAX_ITERATIONS = 20
 
@@ -345,6 +356,9 @@ class LoopData:
         self.params_persistent: dict = {}
         self.current_tool = None
         self.stream_repeat_detected = False  # set by stream callback when repeated block seen
+        self.tool_error_streak: int = 0  # consecutive tool execution errors
+        self.tool_error_streak_name: str = ""  # tool name for the current error streak
+        self.TOOL_ERROR_STREAK_MAX: int = 3  # break loop after N consecutive failures of same tool
 
         # override values with kwargs
         for key, value in kwargs.items():
@@ -417,7 +431,7 @@ class Agent:
                         self.hist_add_warning(message=warning_msg)
                         PrintStyle(font_color="orange", padding=True).print(warning_msg)
                         self.context.log.log(type="warning", content=warning_msg)
-                        break
+                        return warning_msg
 
                     # call message_loop_start extensions
                     await self.call_extensions(
@@ -507,6 +521,7 @@ class Agent:
                                 warning_msg
                             )
                             self.context.log.log(type="warning", content=warning_msg)
+                            return warning_msg
                         elif (
                             self.loop_data.last_response == agent_response
                         ):  # if assistant_response is the same as last message in history, let him know
@@ -519,6 +534,7 @@ class Agent:
                                 warning_msg
                             )
                             self.context.log.log(type="warning", content=warning_msg)
+                            return warning_msg
 
                         else:  # otherwise proceed with tool
                             # Append the assistant's response to the history
@@ -897,6 +913,14 @@ class Agent:
             raw_tool_name = tool_request.get("tool_name", tool_request.get("tool",""))  # Get the raw tool name
             tool_args = tool_request.get("tool_args", tool_request.get("args", {}))
 
+            # Fallback: if tool_args is empty and the model put args at top level (e.g. "text", "message"),
+            # extract non-meta keys as tool_args so smaller models work without strict format adherence.
+            if not tool_args and raw_tool_name:
+                _META_KEYS = {"tool_name", "tool", "tool_args", "args", "headline", "thoughts"}
+                flat_args = {k: v for k, v in tool_request.items() if k not in _META_KEYS}
+                if flat_args:
+                    tool_args = flat_args
+
             tool_name = raw_tool_name  # Initialize tool_name with raw_tool_name
             tool_method = None  # Initialize tool_method
 
@@ -926,21 +950,45 @@ class Agent:
 
             # Fallback to local get_tool if MCP tool was not found or MCP lookup failed
             if not tool:
-                tool = self.get_tool(
-                    name=tool_name,
-                    method=tool_method,
-                    args=tool_args,
-                    message=msg,
-                    loop_data=self.loop_data,
-                )
+                # Guard: if the name looks like an MCP tool (contains a dot)
+                # but wasn't found, give a targeted correction instead of
+                # falling through to the generic Unknown tool handler which
+                # dumps the entire tools prompt.
+                if "." in tool_name:
+                    correction = self._mcp_tool_not_found_message(tool_name)
+                    self.hist_add_warning(correction)
+                    PrintStyle(font_color="orange", padding=True).print(correction)
+                    self.context.log.log(
+                        type="warning",
+                        content=f"{self.agent_name}: {correction}",
+                    )
+                else:
+                    tool = self.get_tool(
+                        name=tool_name,
+                        method=tool_method,
+                        args=tool_args,
+                        message=msg,
+                        loop_data=self.loop_data,
+                    )
 
             if tool:
                 self.loop_data.current_tool = tool  # type: ignore
                 try:
                     await self.handle_intervention()
 
-                    # Call tool hooks for compatibility
-                    await tool.before_execution(**tool_args)
+                    # Call tool hooks for compatibility (includes policy check)
+                    try:
+                        await tool.before_execution(**tool_args)
+                    except Exception as _policy_err:
+                        from python.helpers.tool import PolicyViolation
+
+                        if isinstance(_policy_err, PolicyViolation):
+                            _deny_msg = f"[Policy] {_policy_err}"
+                            self.hist_add_tool_result(tool_name, _deny_msg)
+                            PrintStyle(font_color="orange", padding=True).print(_deny_msg)
+                            self.context.log.log(type="warning", content=_deny_msg)
+                            return _deny_msg
+                        raise
                     await self.handle_intervention()
 
                     # Allow extensions to preprocess tool arguments
@@ -953,6 +1001,20 @@ class Agent:
                     response = await tool.execute(**tool_args)
                     await self.handle_intervention()
 
+                    # Append-only audit log for tool executions (SAFETY-03)
+                    try:
+                        from python.helpers import audit_log
+
+                        audit_log.log_tool_execution(
+                            tool_name=tool_name,
+                            tool_args=tool_args or {},
+                            context_id=context_helper.get_context_data(
+                                "agent_context_id", ""
+                            ) or None,
+                        )
+                    except Exception:
+                        pass
+
                     # Allow extensions to postprocess tool response
                     await self.call_extensions(
                         "tool_execute_after", response=response, tool_name=tool_name
@@ -963,6 +1025,43 @@ class Agent:
 
                     if response.break_loop:
                         return response.message
+
+                    # Reason: detect when the same tool fails repeatedly with
+                    # errors (e.g., SyntaxError in code_execution_tool). The
+                    # LLM often regenerates the same broken code, burning
+                    # iterations without progress. Break after N consecutive
+                    # failures of the same tool.
+                    _ERROR_PATTERNS = (
+                        "SyntaxError",
+                        "IndentationError",
+                        "NameError",
+                        "TypeError",
+                        "ModuleNotFoundError",
+                        "FileNotFoundError",
+                    )
+                    _resp_text = response.message or ""
+                    _has_error = any(p in _resp_text for p in _ERROR_PATTERNS)
+                    if _has_error and tool_name == self.loop_data.tool_error_streak_name:
+                        self.loop_data.tool_error_streak += 1
+                    elif _has_error:
+                        self.loop_data.tool_error_streak = 1
+                        self.loop_data.tool_error_streak_name = tool_name
+                    else:
+                        self.loop_data.tool_error_streak = 0
+                        self.loop_data.tool_error_streak_name = ""
+
+                    if self.loop_data.tool_error_streak >= self.loop_data.TOOL_ERROR_STREAK_MAX:
+                        streak_msg = (
+                            f"Tool '{tool_name}' has failed {self.loop_data.tool_error_streak} "
+                            f"times in a row with the same type of error. Stopping to avoid "
+                            f"an infinite retry loop. Please review the error and try a "
+                            f"different approach."
+                        )
+                        self.hist_add_warning(streak_msg)
+                        PrintStyle(font_color="orange", padding=True).print(streak_msg)
+                        self.context.log.log(type="warning", content=streak_msg)
+                        self.loop_data.tool_error_streak = 0
+                        return streak_msg
                 finally:
                     self.loop_data.current_tool = None
             else:
@@ -1041,6 +1140,39 @@ class Agent:
             loop_data=loop_data,
             **kwargs,
         )
+
+    def _mcp_tool_not_found_message(self, tool_name: str) -> str:
+        """Build a targeted correction when a dot-separated MCP tool name is not found.
+
+        Args:
+            tool_name: The ``server.tool`` name that failed lookup.
+
+        Returns:
+            A correction string listing available tools for the server, or
+            available server names if the server itself is unknown.
+        """
+        try:
+            import python.helpers.mcp_handler as mcp_helper
+
+            mcp_config = mcp_helper.MCPConfig.get_instance()
+            server_part, tool_part = tool_name.split(".", 1)
+            server_names = mcp_config.get_server_names()
+
+            if server_part in server_names:
+                available = mcp_config.get_tool_names(server_part)
+                tools_list = ", ".join(available) if available else "(none)"
+                return (
+                    f"Unknown MCP tool '{tool_name}'. "
+                    f"Available tools on server '{server_part}': {tools_list}"
+                )
+            else:
+                servers_list = ", ".join(server_names) if server_names else "(none)"
+                return (
+                    f"Unknown MCP server '{server_part}' in tool name '{tool_name}'. "
+                    f"Available MCP servers: {servers_list}"
+                )
+        except Exception:
+            return f"Unknown tool '{tool_name}'. Could not retrieve available MCP tools."
 
     async def call_extensions(self, extension_point: str, **kwargs) -> Any:
         return await call_extensions(

@@ -8,11 +8,11 @@ echo "Configuring Claude Code MCP Client"
 echo "=========================================="
 echo ""
 
-# Get MCP token from Agent Zero settings
-TOKEN=$(docker exec agent-zero bash -c "cat /a0/tmp/settings.json 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin)[\"mcp_server_token\"])' 2>/dev/null" || echo "")
+# Get MCP token from Agent Zero runtime
+TOKEN="$(docker exec agent-zero bash -lc "cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'" 2>/dev/null || true)"
 
 if [ -z "$TOKEN" ]; then
-    echo "❌ Error: MCP token not found in Agent Zero settings"
+echo "❌ Error: MCP token not available from Agent Zero runtime"
     echo ""
     echo "Please run: ./configure_mcp_token.sh first"
     exit 1
@@ -29,7 +29,7 @@ echo ""
 
 # Create/Update .mcp.json file
 echo "[Step 2] Creating/updating .mcp.json configuration..."
-docker exec agent-zero bash -c "TOKEN=\$(cat /a0/tmp/settings.json | python3 -c 'import sys, json; print(json.load(sys.stdin)[\"mcp_server_token\"])'); echo \"{\" > /root/.claude/.mcp.json && echo '  \"mcpServers\": {' >> /root/.claude/.mcp.json && echo '    \"agent-zero\": {' >> /root/.claude/.mcp.json && echo '      \"type\": \"sse\",' >> /root/.claude/.mcp.json && echo \"      \\\"url\\\": \\\"http://localhost:8888/mcp/t-\${TOKEN}/sse\\\"\" >> /root/.claude/.mcp.json && echo '    }' >> /root/.claude/.mcp.json && echo '  }' >> /root/.claude/.mcp.json && echo '}' >> /root/.claude/.mcp.json"
+docker exec agent-zero bash -lc "TOKEN=\$(cd /a0 && PYTHONPATH=/a0 /opt/venv-a0/bin/python -c 'from python.helpers import dotenv, runtime, settings; runtime.initialize(); dotenv.load_dotenv(); settings.reload_settings(); print(settings.get_settings()[\"mcp_server_token\"])'); echo \"{\" > /root/.claude/.mcp.json && echo '  \"mcpServers\": {' >> /root/.claude/.mcp.json && echo '    \"agent-zero\": {' >> /root/.claude/.mcp.json && echo '      \"type\": \"sse\",' >> /root/.claude/.mcp.json && echo \"      \\\"url\\\": \\\"http://localhost:8888/mcp/t-\${TOKEN}/sse\\\"\" >> /root/.claude/.mcp.json && echo '    }' >> /root/.claude/.mcp.json && echo '  }' >> /root/.claude/.mcp.json && echo '}' >> /root/.claude/.mcp.json"
 
 # Verify configuration
 echo "[Step 3] Verifying configuration..."

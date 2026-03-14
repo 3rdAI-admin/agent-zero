@@ -4,6 +4,7 @@ import shlex
 import time
 from python.helpers.tool import Tool, Response
 from python.helpers import files, rfc_exchange, projects, runtime, settings
+from python.helpers.host_control import is_terminal_command_allowed
 from python.helpers.print_style import PrintStyle
 from python.helpers.shell_local import LocalInteractiveSession
 from python.helpers.shell_ssh import SSHInteractiveSession
@@ -78,8 +79,15 @@ class CodeExecution(Tool):
                 code=self.args["code"], session=session, reset=reset
             )
         elif runtime == "terminal":
+            command = self.args.get("code") or ""
+            allowed, reason = is_terminal_command_allowed(command)
+            if not allowed:
+                return Response(
+                    message=f"[Host control] {reason}",
+                    break_loop=False,
+                )
             response = await self.execute_terminal_command(
-                command=self.args["code"], session=session, reset=reset
+                command=command, session=session, reset=reset
             )
         elif runtime == "output":
             response = await self.get_terminal_output(
@@ -170,13 +178,70 @@ class CodeExecution(Tool):
         self.agent.set_data("_cet_state", self.state)
         return self.state
 
+    # Reason: Linux ARG_MAX is ~128KB. shlex.quote() adds escaping overhead,
+    # so the effective safe limit for code passed via `python3 -c` is lower.
+    # 100KB gives comfortable headroom.
+    MAX_CODE_SIZE = 100_000
+
+    # Reason: LLMs sometimes wrap code in triple-quote assignment patterns like
+    # `code = '''...'''` or `exec("""...""")`.  These are fragile: if the model
+    # truncates the closing quotes the code silently becomes invalid.  Catching
+    # the pattern early produces a clearer error than a downstream SyntaxError.
+    _WRAPPER_PATTERN = re.compile(
+        r"""^\s*\w+\s*=\s*(?:'''|\"\"\")|^\s*exec\s*\(\s*(?:'''|\"\"\")""",
+        re.MULTILINE,
+    )
+
     async def execute_python_code(self, session: int, code: str, reset: bool = False):
+        # Guard: reject oversized payloads before they hit OS ARG_MAX limits
+        if len(code) > self.MAX_CODE_SIZE:
+            warning = (
+                f"Code payload too large ({len(code):,} bytes, limit {self.MAX_CODE_SIZE:,}). "
+                "Write the code to a file and execute the file instead."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
+        # Guard: detect triple-quote wrapper patterns that risk truncation
+        if self._WRAPPER_PATTERN.search(code):
+            warning = (
+                "Code uses a triple-quote wrapper pattern (e.g. `code = '''...'''`) "
+                "which is fragile and prone to truncation. Write the code directly "
+                "without wrapping it in a string variable."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
+        # Validate code completeness to prevent SyntaxError loops from truncated streams
+        # (IMPROVE.md Task 2: FR-3.1)
+        import ast
+
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            error_msg = str(e).lower()
+            incomplete_keywords = ["incomplete", "eof", "unclosed", "unexpected end"]
+            if any(kw in error_msg for kw in incomplete_keywords):
+                warning = f"Code appears incomplete (SyntaxError: {e}). Please provide complete code before execution."
+                PrintStyle.warning(warning)
+                return warning
+            # For other SyntaxErrors (typos, invalid syntax), allow execution to fail normally
+            # so agent sees real error message
+
         escaped_code = shlex.quote(code)
         command = f"ipython -c {escaped_code}"
         prefix = "python> " + self.format_command_for_output(code) + "\n\n"
         return await self.terminal_session(session, command, reset, prefix)
 
     async def execute_nodejs_code(self, session: int, code: str, reset: bool = False):
+        if len(code) > self.MAX_CODE_SIZE:
+            warning = (
+                f"Code payload too large ({len(code):,} bytes, limit {self.MAX_CODE_SIZE:,}). "
+                "Write the code to a file and execute the file instead."
+            )
+            PrintStyle.warning(warning)
+            return warning
+
         escaped_code = shlex.quote(code)
         command = f"node /exe/node_eval.js {escaped_code}"
         prefix = "node> " + self.format_command_for_output(code) + "\n\n"
