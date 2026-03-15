@@ -88,17 +88,17 @@ services:
       - /var/log:rw,nosuid,nodev,mode=0755
     # Shared memory for Chromium/Playwright (default 64MB is small; larger shm improves browser responsiveness)
     shm_size: '512mb'
-    # Total memory+swap = 16G (same as memory limit) so container cannot use extra swap — predictable response under memory pressure
-    memswap_limit: 16g
-    # Resource limits - set to 16GB for better responsiveness; Docker Desktop must allow at least this much
+    # Total memory+swap = 24G (same as memory limit) so container cannot use extra swap — predictable response under memory pressure
+    memswap_limit: 24g
+    # Resource limits - set to 24GB for better responsiveness; Docker Desktop must allow at least this much
     deploy:
       resources:
         limits:
-          memory: 16G     # Max memory (increase if host has more and agent is still slow)
-          cpus: '4.0'     # Max CPU cores
+          memory: 24G     # Max memory (increase if host has more and agent is still slow)
+          cpus: '8.0'     # Max CPU cores
         reservations:
-          memory: 10G       # Guaranteed RAM for more consistent latency (was 8G)
-          cpus: '3.0'       # Guaranteed CPU (was 2.0)
+          memory: 16G       # Guaranteed RAM for more consistent latency
+          cpus: '4.0'       # Guaranteed CPU
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/health"]
       interval: 30s
