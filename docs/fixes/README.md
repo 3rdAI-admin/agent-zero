@@ -33,6 +33,24 @@ Fixes three issues with Anthropic Claude API integration:
 - `.env` - API key configuration
 - `Dockerfile:36` - Documentation reference
 
+### Voice Function - Whisper Model Size
+**File**: `VOICE_WHISPER_MODEL_SIZE.md`
+**Date**: 2026-03-15
+**Status**: ✅ Active
+
+Fixes Whisper STT model crash that prevented voice function from working:
+1. run_ui process crash (SIGKILL)
+2. "Failed to load modal content" error in browser
+3. Voice/speech-to-text not loading
+
+**Impact**:
+- Voice function now works reliably
+- No more process crashes
+- Faster model loading with "base" vs "medium"
+
+**Files Modified**:
+- `/Users/james/Docker/A0_volume/settings.json:72` - Changed `stt_model_size` from "medium" to "base"
+
 ## Adding New Fixes
 
 When documenting a new fix:
@@ -91,5 +109,5 @@ How the fix survives restarts/rebuilds
 
 ---
 
-**Last Updated**: 2026-03-14
-**Total Fixes**: 1 active
+**Last Updated**: 2026-03-15
+**Total Fixes**: 2 active
