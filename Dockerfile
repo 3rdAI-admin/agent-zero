@@ -33,6 +33,7 @@ ARG CACHE_DATE=none
 RUN echo "cache buster ${CACHE_DATE}" && bash /ins/install_A02.sh "$BRANCH"
 
 # Sync repo into /a0 so the app (run_ui.py, models.py, etc.) uses built code including local fixes.
+# Includes: Anthropic API compatibility fix (models.py:512-517) - see docs/fixes/ANTHROPIC_COMPATIBILITY.md
 RUN mkdir -p /a0 && cp -rn /git/agent-zero/. /a0/
 
 # Remove apt caches to keep the image lean.

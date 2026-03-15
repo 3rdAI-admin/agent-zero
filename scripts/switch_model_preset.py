@@ -90,6 +90,36 @@ PRESETS = {
         "browser_model_name": "claude-sonnet-4-6",
         "browser_model_api_base": "",
     },
+    "live": {
+        # Current Th3rdAI production settings (as of 2026-03-14)
+        "chat_model_provider": "anthropic",
+        "chat_model_name": "claude-sonnet-4-6",
+        "chat_model_api_base": "",
+        "chat_model_ctx_length": 32000,
+        "chat_model_kwargs": {
+            "temperature": 0.4,
+            "frequency_penalty": 1.45,
+            "max_tokens": 4096,
+            "top_p": 0.9,
+        },
+        "util_model_provider": "anthropic",
+        "util_model_name": "claude-sonnet-4-6",
+        "util_model_api_base": "",
+        "util_model_ctx_length": 32000,
+        "util_model_kwargs": {
+            "temperature": 0.2,
+            "frequency_penalty": 1.1,
+            "max_tokens": 2048,
+        },
+        "browser_model_provider": "anthropic",
+        "browser_model_name": "claude-sonnet-4-6",
+        "browser_model_api_base": "",
+        "browser_model_kwargs": {
+            "temperature": 0.2,
+            "frequency_penalty": 1.45,
+            "max_tokens": 4096,
+        },
+    },
     "venice": {
         "chat_model_provider": "venice",
         "chat_model_name": "mistral-31-24b",

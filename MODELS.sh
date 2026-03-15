@@ -46,6 +46,7 @@ if [[ -z "$PRESET" ]]; then
   echo "  google       Chat/Utility/Browser -> Google Gemini 2.5 Flash (1M context, free tier)"
   echo "  google-pro   Chat -> Gemini 2.5 Pro, Utility/Browser -> Gemini 2.5 Flash"
   echo "  anthropic    Chat/Utility/Browser -> Anthropic (Claude)"
+  echo "  live         Th3rdAI production config: Claude Sonnet 4.6 with tuned params (current settings)"
   echo "  venice       Chat/Utility/Browser -> Venice.ai direct (mistral-31-24b, qwen3-4b)"
   echo "  agent-zero   Chat/Utility/Browser -> Agent Zero API (llm.agent-zero.ai/v1, mistral-31-24b, qwen3-4b, temp 0.2)"
   echo "  deepseek     Chat -> DeepSeek (deepseek-chat), Utility/Browser -> Ollama (gemma3:1b, qwen2.5:latest)"
@@ -72,7 +73,7 @@ PRESET_LOWER="$(echo "$PRESET" | tr '[:upper:]' '[:lower:]')"
 # Normalize for Python script (preset keys use underscores)
 PRESET_LOWER="${PRESET_LOWER//-/_}"
 case "$PRESET_LOWER" in
-  google|google_pro|anthropic|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_baz|ollama_glm_claude) ;;
+  google|google_pro|anthropic|live|venice|agent_zero|deepseek|ollama|ollama_dual|ollama_glm|ollama_qwen3|ollama_mixed|ollama_baz|ollama_glm_claude) ;;
   *)
     echo "Error: unknown preset '$PRESET'. Run without arguments to see available presets."
     exit 2
